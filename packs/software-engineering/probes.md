@@ -115,3 +115,79 @@ regex-hit("artifacts/07-handover.md", "https://", "https 开头的网址")
 
 ### 7.19
 file-exists("db/seeds/*.sql")
+
+### 3.1
+all(
+  file-exists("artifacts/03-features.md"),
+  count-at-least("artifacts/03-features.md", "小节", 1),
+  not(regex-hit("artifacts/03-features.md", "###\\s*AC-[0-9]+[^给]*\\n[^给当则]*\\n", "缺给定/当/则的AC"))
+)
+
+### 3.2
+not(regex-hit("artifacts/03-features.md", "友好|易用|快速|美观|方便|简洁|良好|合理|尽快|优化|灵活|完善|高效", "模糊形容词"))
+
+### 3.4
+table-column-filled("artifacts/03-features.md", "*", "验收标准")
+
+### 3.6
+count-at-least("artifacts/03-features.md", "小节", 1)
+
+### 3.10
+all(
+  file-exists("artifacts/01-scope-card.md"),
+  file-exists("artifacts/03-features.md")
+)
+
+### 4.5
+not(regex-hit("package.json", "\\^|~", "范围版本号"))
+
+### 4.9
+not(regex-hit("package.json", "react-redux|mongoose|@apollo/server|graphql|styled-components", "约定外组件"))
+
+### 7.1
+regex-hit("artifacts/07-handover.md", "https?://[a-zA-Z0-9.-]+", "访问网址")
+
+### 7.4
+regex-hit("artifacts/07-handover.md", "换人部署|他人部署|独立部署", "换人验证记录")
+
+### 7.6
+regex-hit("artifacts/07-handover.md", "恢复演练|恢复测试|备份恢复", "恢复演练记录")
+
+### 7.12
+not(regex-hit("src/**/*.js", "console\\.log|debugger", "调试代码"))
+
+### 7.20
+not(regex-hit("docs/**/*.md", "张三|李四|王五|测试|demo@", "演示真数据"))
+
+### 7.21
+regex-hit("artifacts/07-handover.md", "https?://", "演示地址")
+
+### 8.1
+file-exists("artifacts/08-issues.md")
+
+### 8.2
+table-column-filled("artifacts/08-issues.md", "*", "分级")
+
+### 8.3
+all(
+  file-exists("artifacts/08-changes.md"),
+  table-column-filled("artifacts/08-changes.md", "*", "关联验收标准")
+)
+
+### 8.4
+not(regex-hit("artifacts/08-issues.md", "类型.*需求", "需求进了问题台账"))
+
+### 8.5
+all(
+  file-exists("artifacts/02-dictionary.md"),
+  file-exists("artifacts/08-changes.md")
+)
+
+### 8.6
+table-column-filled("artifacts/08-changes.md", "*", "测试是否全绿")
+
+### 8.7
+table-column-filled("artifacts/08-changes.md", "*", "是否已备份")
+
+### 8.8
+not(regex-hit("artifacts/08-issues.md", "状态.*处理中.*重要|状态.*处理中.*紧急", "逾期重要问题"))

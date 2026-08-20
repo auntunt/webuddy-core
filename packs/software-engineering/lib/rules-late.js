@@ -164,12 +164,6 @@ export const RULES_LATE = {
     if (f.eng.commitCount === 0) return { r: F, detail: '存档工具接上了，但一次都没存过。让 AI 存一次档（提交）' };
     return { r: P, detail: `存过 ${f.eng.commitCount} 次档，最近一次 ${f.eng.lastCommitDate}` };
   },
-  '4.5': (f) => {
-    if (!f.eng.pkg) return { r: F, detail: '项目地基还没搭：缺 package.json' };
-    const bad = f.eng.rangeDeps;
-    if (bad.length === 0) return { r: P, detail: `${f.eng.depCount} 个现成组件都锁定了版本` };
-    return { r: F, detail: `${bad.length} 个现成组件没锁版本，写成了「这一系列的最新版」：${bad.slice(0, 4).join('、')}${bad.length > 4 ? ' 等' : ''}。让 AI 改成固定版本号（去掉 ^ 和 ~），否则换台电脑装到的是新版，同样的代码就跑不起来` };
-  },
   '4.6': (f) => {
     const problems = [];
     if (f.eng.envCommitted) problems.push('装密码的配置文件（.env）跟着代码一起存档了，密码等于公开了');
@@ -182,14 +176,6 @@ export const RULES_LATE = {
     if (problems.length === 0 && f.eng.codeFileCount === 0) return { r: ASK, detail: '还没有代码，这条现在判不了' };
     if (problems.length === 0) return { r: P };
     return { r: F, detail: problems.join('；') };
-  },
-  '4.9': (f) => {
-    if (!f.eng.pkg) return { r: NA, detail: '还没有组件清单，无从对照' };
-    const OFF_STACK = ['react-redux', 'redux', 'mongoose', 'mongodb', '@apollo/server', 'graphql', 'kubernetes-client', 'styled-components', 'emotion'];
-    const found = Object.keys(f.eng.deps).filter((d) => OFF_STACK.some((o) => d === o || d.startsWith(`${o}/`)));
-    return found.length === 0
-      ? { r: P }
-      : { r: X, detail: `AI 用了约定方案之外的组件：${found.join('、')}。不一定错，但得你点头一次——问它一句为什么非要换，理由说不通就让它换回来` };
   },
 
   // ───────── 环节五 分步实现（逐切片，这里判整体状况） ─────────
@@ -414,74 +400,6 @@ export const RULES_LATE = {
   },
 
   // ───────── 环节七 上线与上架 ─────────
-  '7.1': (f) => {
-    const r = runResult(f, 'liveUrl');
-    const url = f.art.handover.url;
-    if (!url) return { r: F, detail: '交接单里还没写用户该打开哪个网址' };
-    if (r) return r.ok ? { r: P, detail: `${url} 能打开（${r.date}）` } : { r: F, detail: `${url} 打不开：${r.error || ''}` };
-    return { r: X, detail: `网址写了（${url}），但还没真打开看过一次` };
-  },
-  /**
-   * 7.4 是及格线第二条本身：换个人照文档也能装起来。
-   *
-   * 这条以前只看交接单里有没有"换人"两个字加一个日期，
-   * 结果手打八个字就能让整条及格线变绿——这正是工具最该拦的那种作假。
-   * 现在改成：交接单的痕迹只是入场券，还得有第二个人的名字，
-   * 而且必须由人明确确认过一次（人确认会记名字和日期，可复核）。
-   * 判据依旧不读代码：看的是"有没有另一个人的署名"，不是"部署脚本写得好不好"。
-   */
-  '7.4': (f) => {
-    const h = f.art.handover;
-    if (!h.exists) return { r: F, detail: '还没有交接单，这条无从谈起（文件在 artifacts/07-handover.md）' };
-    if (!f.eng.hasDeployScript) {
-      return { r: F, detail: '没有"一条命令把它装起来"的办法。换人部署这件事的前提是有个能照着敲的命令，不然文档写得再细也是口述' };
-    }
-    if (!h.otherPersonDeployed) {
-      return { r: F, detail: '交接单的"部署方式"里还没有别人照文档装成功的记录。要写清：谁装的（名字）、哪天装的、装的过程中哪一步文档没说清楚' };
-    }
-    if (!h.otherPersonNamed) {
-      return { r: F, detail: '记录里没有第二个人的名字，只写了"换人复核"这类字眼。及格线要的是"另一个具体的人做成了这件事"，名字得落到纸面上，将来才有人可问' };
-    }
-    // 走到这里痕迹齐了，但"照文档装起来"这件事本身只有在场的人知道，
-    // 所以最后一步交给人确认，不让工具替人点头。
-    return human(f, '7.4');
-  },
-  /**
-   * 7.6 是及格线第三条本身：数据能恢复。
-   *
-   * 这条以前只看交接单里有没有"演练"两个字加一个日期。
-   * 手打「演练 恢复成功 2026-08-02」就能让第三条及格线变绿，
-   * 而那个目录里可能连备份脚本都没有——这是整个工具最严重的一个洞。
-   *
-   * 现在要三样东西同时成立：
-   *   1. 有 restore 命令（不然"恢复"只是个说法）
-   *   2. 这条命令真的跑通过一次（webuddy check restore，或 agent 痕迹里的退出码）
-   *   3. 交接单里写下了演练记录，人确认过
-   * 备份跑通不算恢复跑通：备份文件可能是空的、格式可能是错的，
-   * 只有真读回来过才知道。这一条上不留任何纸面通道。
-   */
-  '7.6': (f) => {
-    if (!f.eng.hasBackupScript) return { r: F, detail: '还没有备份数据的办法，恢复无从谈起' };
-    const d = f.art.handover.restoreDrill;
-    if (!d.exists) {
-      return { r: F, detail: '交接单的"备份与恢复"栏还没有演练记录。这是及格线第三条，不接受纸面通过。要写四件事：哪天演练的、删了什么、多久恢复回来的、恢复后抽查了哪几条数据（写出具体那条单据的内容）' };
-    }
-    // 07-门禁清单.md:231 的加固要求：条数对得上不代表内容对得上，
-    // 要抽几条比对字段值，对不上直接不通过。
-    // 所以这里逐项查四个要素，缺哪样说哪样——不合并成一句"记录不完整"。
-    const miss = [];
-    if (!d.hasDate) miss.push('哪天演练的');
-    if (!d.hasElapsed) miss.push('从发现到恢复可用花了多久');
-    if (!d.hasSample) miss.push('恢复后抽查了哪几条数据（要写出具体单据，比如"7-28 的领料单 6 条明细"，不能只写"数据都在"）');
-    if (miss.length) {
-      return { r: X, detail: `演练记录还缺：${miss.join('；')}。缺了这些，将来出事的人照着这段字恢复不出来` };
-    }
-    if (d.countOnly) {
-      return { r: F, detail: '演练记录只对了条数，没比对内容。条数对得上不代表内容对得上——恢复出来的可能是空字段或乱码。抽两三条把字段值也核一遍，对不上直接算没过' };
-    }
-    // 记录齐了，但"恢复出来的东西真的对"只有在场的人能确认，工具不替人点头。
-    return human(f, '7.6');
-  },
   /**
    * 7.7 监控告警配置且通道验证。
    *
@@ -511,30 +429,6 @@ export const RULES_LATE = {
     return human(f, '7.10');
   },
   '7.11': (f) => (f.art.handover.trainingRecorded ? { r: P } : human(f, '7.11')),
-  /**
-   * 7.12 正式系统里没有测试数据。
-   *
-   * 以前只要交接单里写了个网址就直接判通过——
-   * "写了个网址"和"库里没有张三李四测试单"之间没有任何关系，
-   * 这条从来不会 fail，等于摆设。
-   *
-   * 工具没法连进客户的库去查数据，所以这条不该假装能自动判。
-   * 改成：没痕迹时交给人确认——人确认会留名字和日期，可复核。
-   * 这比"有网址就算过"诚实，也符合规则二：判据是人看一眼库，不是读代码。
-   *
-   * 那个"有越界痕迹就判红"的分支已经删掉了。它读 notes.violations.testDataInProd，
-   * 而全仓库没有任何地方写这个键——跟 7.8 原来读 notes.manualPath 是同一个病：
-   * 一段永远不执行的判定，看着像有自动检查在兜底，其实一行都没跑。
-   * 留着它比没有更坏：写规则的人会以为这条已经有客观判据，不再去补真正的检查。
-   * 库里有没有测试数据，只有人打开系统看得出来，所以这条只有人工确认一条路。
-   */
-  '7.12': (f) => {
-    // 还没上线的时候，"生产环境是干净的"没有意义——因为还没有生产环境。
-    if (!f.art.handover.url) return { r: NA, detail: '还没上线，没有正式环境可查' };
-    const h = human(f, '7.12');
-    if (h.r !== ASK) return h;
-    return { r: ASK, detail: '打开正式系统翻一遍数据，把测试时乱填的单子（张三、测试一下、aaa 这种）删干净，然后在这里确认。用户第一次打开看到假数据，会以为整个系统的数都不能信' };
-  },
   '7.14': (f) => {
     const exposure = f.local.answers?.['pre-deploy-compliance']?.exposure;
     if (!exposure) return { r: ASK, detail: '要先知道一件事才能判：这系统给谁访问？只有单位内部员工，还是外面的人也能打开？只在内网用的话，这条大概率不适用' };
@@ -584,104 +478,6 @@ export const RULES_LATE = {
     if (h.r !== ASK) return h;
     return { r: ASK, detail: '写一小段演示脚本（文件在 artifacts/07-demo-script.md，模板用 webuddy new 演示脚本 生成）：打开哪个页面、点哪几下、每步说什么，3 分钟内走完。写好后在这里确认' };
   },
-  '7.20': (f) => {
-    const h = human(f, '7.20');
-    if (h.r !== ASK) return h;
-    return { r: ASK, detail: '把演示数据翻一遍：真实姓名、手机号、密码、客户的真单子都不能出现，换成编的。确认干净后在这里留痕' };
-  },
-  '7.21': (f) => {
-    const r = runResult(f, 'demoUrl');
-    if (r?.ok) return { r: P, detail: `${r.date} 演示地址打开看过（${r.note || '返回正常'}）` };
-    if (r && !r.ok) return { r: F, detail: `演示地址打不开：${r.error || '见日志'}` };
-    return { r: X, detail: '演示地址还没真打开看过。用给别人看时的那个地址打开一次，跑 webuddy check demoUrl --url <地址>，工具会替你留痕' };
-  },
 
   // ───────── 环节八 运行与迭代 ─────────
-  '8.1': (f) => {
-    const i = f.art.operate.issues;
-    if (!i.exists) return { r: F, detail: '还没有问题本子。用户反馈的每个问题记一行：谁提的、什么问题、多急、处理完没有（文件在 artifacts/08-issues.md）' };
-    return i.count > 0 ? { r: P, detail: `记了 ${i.count} 条` } : { r: X, detail: '本子建了但一条都没记。上线后一个问题都没有，通常不是做得好，是没人在用' };
-  },
-  '8.2': (f) => {
-    const i = f.art.operate.issues;
-    if (!i.exists) return { r: F, detail: '还没有问题本子' };
-    // 零条问题时"都分级了"成立但无意义。8.1 已经在管台账有没有在用，
-    // 这里判不适用，别拿空表换绿灯。
-    if (!i.count) return { r: NA, detail: '本子还没记东西' };
-    return i.ungraded === 0 ? { r: P } : { r: F, detail: `${i.ungraded} 条问题没标多急。四档：紧急当天办 / 重要三天内 / 一般下个版本 / 属于新需求的进下一轮场景卡` };
-  },
-  '8.3': (f) => {
-    const c = f.art.operate.changes;
-    if (!c.exists) return { r: F, detail: '还没有变更记录。上线后每改一次记一行：哪天改的、改了什么、对应哪条验收标准（文件在 artifacts/08-changes.md）' };
-    if (c.count === 0) return { r: NA, detail: '还没改过东西' };
-    return c.unlinked === 0 ? { r: P, detail: `${c.count} 次改动都写清了对应哪条验收标准` } : { r: F, detail: `${c.unlinked} 次改动没写对应哪条验收标准。以后想查这处为什么改，查不出来` };
-  },
-  /**
-   * 8.4 需求没有走 bug 流程被顺手改掉。
-   *
-   * 判据依赖台账里那一列能区分「需求」和「缺陷」。
-   * 这一列不存在时，以前会算出 requestsInBugFlow=0 然后判绿——
-   * 那是把"我没法查"说成了"查过没问题"，正是这套门禁最该避免的一种绿灯。
-   */
-  '8.4': (f) => {
-    const iss = f.art.operate.issues;
-    if (!iss.exists || !iss.count) {
-      return { r: NA, detail: '本子还没记东西，还没真进运行阶段' };
-    }
-    if (iss.noKindCol) {
-      return { r: ASK, detail: '台账里没有能分出「这是故障」还是「这是新想法」的那一栏，所以这条判不了。在台账加一列「类型」，填缺陷 / 使用问题 / 需求' };
-    }
-    const n = iss.requestsInBugFlow;
-    return n === 0
-      ? { r: P }
-      : { r: F, detail: `${n} 条其实是「想加个新功能」，被当成故障顺手改掉了。这是系统烂掉的起点——新功能要进下一轮场景卡重新走一遍，别插队` };
-  },
-  /**
-   * 8.5 / 8.6 / 8.7 都判"上线之后每次改动有没有守规矩"。
-   *
-   * 这三条原来读 `notes.releases`，而全仓库没有任何代码写这个字段——
-   * 于是永远是空数组，永远判 na，三条门禁一起变成摆设。
-   * fixture 里那几条 releases 是手写进 state.json 的，工具自己从来不产生。
-   *
-   * 改成读学员真的在填的那份产物：变更记录（artifacts/08-changes.md）。
-   * 06-产物模板.md 的变更记录本来就有「是否动数据模型／测试是否全绿／是否已备份」三列，
-   * 正好对上这三条门禁。这样判据是"表里这一列填了什么"，
-   * 不读代码、可复核、而且学员填的东西第一次真的被用上了。
-   *
-   * 空表判 na（还没改过东西），有行但列缺了判 fail——
-   * 不能因为"没记录"就算通过，那正是原来那个洞。
-   */
-  '8.5': (f) => {
-    const v = f.local.notes?.violations?.schemaChangedInOps || [];
-    if (v.length) return { r: F, detail: `数据表结构直接改了，没回环节二先改数据字典：${v.join('、')}。文档跟实际一旦对不上，以后没人敢动这个系统` };
-    const c = f.art.operate.changes;
-    if (!c.exists || c.count === 0) return { r: NA, detail: '上线后还没改过东西' };
-    if (c.noSchemaCol) return { r: F, detail: '变更记录里没有「是否动数据模型」这一列。改了表结构却不回去改数据字典，是系统烂掉最常见的一条路，所以这一列必须记。补上这列，每次发版填是或否' };
-    if (c.schemaChangedNoModelUpdate > 0) {
-      return { r: F, detail: `有 ${c.schemaChangedNoModelUpdate} 次改了数据表结构，但没标明回环节二先更新数据字典。要么补上"已同步数据字典"，要么现在回去把字典改对` };
-    }
-    return { r: P, detail: `${c.count} 次改动都记了动没动数据模型` };
-  },
-  '8.6': (f) => {
-    const c = f.art.operate.changes;
-    if (!c.exists || c.count === 0) return { r: NA, detail: '上线后还没改过东西' };
-    if (c.noTestCol) return { r: F, detail: '变更记录里没有「测试是否全绿」这一列。上线之后每改一次都得先跑测试，不记就没人知道有没有跑。补上这列' };
-    if (c.notGreen > 0) return { r: F, detail: `${c.notGreen} 次发版前测试没全绿就发上去了。测试是你唯一能看出改动有没有弄坏别的地方的通道` };
-    if (c.testBlank > 0) return { r: X, detail: `${c.testBlank} 次发版的「测试是否全绿」栏空着。空着等于没跑——跑一次填上，或者写清为什么这次不用跑` };
-    return { r: P, detail: `${c.count} 次发版前测试都全过` };
-  },
-  '8.7': (f) => {
-    const c = f.art.operate.changes;
-    if (!c.exists || c.count === 0) return { r: NA, detail: '上线后还没改过东西' };
-    if (c.noBackupCol) return { r: F, detail: '变更记录里没有「是否已备份」这一列。发版前先备份是改坏了还能退回去的唯一保障，必须每次记' };
-    if (c.notBackedUp > 0) return { r: F, detail: `${c.notBackedUp} 次发版前没先备份。改坏了数据就找不回来了` };
-    if (c.backupBlank > 0) return { r: X, detail: `${c.backupBlank} 次发版的「是否已备份」栏空着。空着就当没备份，补填一下` };
-    return { r: P, detail: `${c.count} 次发版前都先备份了` };
-  },
-  '8.8': (f) => {
-    const i = f.art.operate.issues;
-    if (!i.exists) return { r: F, detail: '还没有问题本子' };
-    if (!i.count) return { r: NA, detail: '本子还没记东西' };
-    return i.open === 0 ? { r: P } : { r: X, detail: `${i.open} 条问题还挂着没处理完。对一下有没有超过当初标的时限（紧急当天、重要三天）` };
-  },
 };

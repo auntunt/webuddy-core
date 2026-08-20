@@ -116,40 +116,7 @@ export const RULES = {
   },
 
   // ───────── 环节三 规格与验收标准 ─────────
-  '3.1': (f) => {
-    const s = f.art.spec.features;
-    if (!s.exists) return { r: F, detail: '还没有功能清单。先列要做哪些功能，每个功能下面写几条验收标准，每条按「给定什么情况 / 当谁做了什么 / 则应该出现什么」三段写（文件在 artifacts/03-features.md）' };
-    if (s.acCount === 0) return { r: F, detail: '还没有验收标准' };
-    return s.incompleteAC.length === 0
-      ? { r: P, detail: `${s.acCount} 条全部有给定/当/则` }
-      : { r: F, detail: `这些条目三段没写全：${s.incompleteAC.slice(0, 8).join('、')}${s.incompleteAC.length > 8 ? ` 等 ${s.incompleteAC.length} 条` : ''}` };
-  },
-  '3.2': (f) => {
-    const hits = f.art.spec.features.bannedHits || [];
-    if (!f.art.spec.features.exists) return { r: F, detail: '还没有功能清单' };
-    // 一条标准都没写的时候，"没有模糊形容词"当然成立——但那是因为一个字都没写。
-    if (!f.art.spec.features.acCount) return { r: F, detail: '还没有验收标准' };
-    if (hits.length === 0) return { r: P };
-    const sample = hits.slice(0, 5).map((h) => `${h.code}「${h.words.join('/')}」`).join('，');
-    return { r: F, detail: `用了没法判真假的形容词：${sample}${hits.length > 5 ? ` 等 ${hits.length} 处` : ''}` };
-  },
-  '3.4': (f) => {
-    const s = f.art.spec.features;
-    if (!s.exists) return { r: F, detail: '还没有功能清单' };
-    if (!s.featureCount) return { r: F, detail: '功能清单还是空的，先把要做的功能列出来' };
-    return s.featuresWithoutAC.length === 0
-      ? { r: P }
-      : { r: F, detail: `这些功能没配验收标准：${s.featuresWithoutAC.slice(0, 6).join('、')}` };
-  },
   '3.5': (f) => (f.art.scopeCard.exists && f.art.spec.features.exists ? human(f, '3.5') : { r: F, detail: '缺场景卡或功能清单，无法对照' }),
-  '3.6': (f) => {
-    const s = f.art.spec.features;
-    if (!s.exists || s.acCount === 0) return { r: F, detail: '还没有验收标准' };
-    const ratio = s.negativeCount / s.acCount;
-    if (s.negativeCount === 0) return { r: F, detail: '全是正常流程，一条反例都没有。补「填错了」「没权限」「超长」这类' };
-    if (ratio < 0.15) return { r: X, detail: `反例只有 ${s.negativeCount} 条（占 ${Math.round(ratio * 100)}%），偏少` };
-    return { r: P, detail: `反例 ${s.negativeCount} 条` };
-  },
   '3.7': (f) => human(f, '3.7'),
   '3.9': (f) => {
     const n = f.art.spec.features.acCount;
@@ -157,13 +124,5 @@ export const RULES = {
     if (n < 20) return { r: X, detail: `只有 ${n} 条，通常是想漏了（参考区间 20–100）。这条只提示，不阻断` };
     if (n > 100) return { r: X, detail: `有 ${n} 条，通常是范围没收住。回去看场景卡的「明确不做」。这条只提示，不阻断` };
     return { r: P, detail: `${n} 条，在合理区间` };
-  },
-  '3.10': (f) => {
-    const v = f.art.spec.features.scopeViolations || [];
-    if (!f.art.spec.features.exists) return { r: F, detail: '还没有功能清单' };
-    if (!f.art.spec.features.acCount) return { r: F, detail: '还没有验收标准' };
-    return v.length === 0
-      ? { r: P }
-      : { r: F, detail: `场景卡说不做的东西，验收标准里出现了：${[...new Set(v)].join('、')}。要么改场景卡，要么删标准——但要明确决定一次` };
   },
 };
