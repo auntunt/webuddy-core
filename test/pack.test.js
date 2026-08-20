@@ -218,8 +218,16 @@ test('mountPack 挂载包到项目', async () => {
     const stateFile = path.join(tmpDir, '.webuddy', 'state.json');
     assert.ok(fs.existsSync(stateFile));
 
+    /**
+     * state.pack 是字符串，不是对象（§2.3 的 schema 就一个 "pack": "software-engineering"）。
+     * resolvePack 会把这个字段原样再喂给自己解一次，存对象进去的话下次 check 会死在
+     * nameOrDir.includes 上——挂载当场看着是成功的，错到第二条命令才炸。
+     * 按路径挂的存路径，好让不在 packs/ 下的包（fixtures、临时目录）也挂得上。
+     */
     const state = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
-    assert.strictEqual(state.pack.name, 'test-pack');
+    assert.strictEqual(typeof state.pack, 'string');
+    assert.strictEqual(state.pack, path.resolve(TEST_PACK_DIR));
+    assert.strictEqual(resolvePack(state.pack), path.resolve(TEST_PACK_DIR));
   } finally {
     fs.rmSync(tmpDir, { recursive: true });
   }
@@ -230,7 +238,7 @@ test('mountPack 包不存在报错', async () => {
   try {
     const result = await mountPack(tmpDir, '/nonexistent/pack');
     assert.strictEqual(result.ok, false);
-    assert.ok(result.error.includes('找不到担架包'));
+    assert.ok(result.error.includes('找不到这套检查清单'), result.error);
   } finally {
     fs.rmSync(tmpDir, { recursive: true });
   }

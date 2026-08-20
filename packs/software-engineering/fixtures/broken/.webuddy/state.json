@@ -1,0 +1,335 @@
+{
+  "pack": "software-engineering",
+  "packVersion": "0.1.0",
+  "mountedAt": "2026-01-01T00:00:00Z",
+  "premises": null,
+  "answers": {
+    "pre-deploy-infra": {
+      "domain": "不用域名，内网 IP 192.168.10.42 直接访问",
+      "domain__at": "2026-08-09",
+      "server": "客户内网，IT部门给的一台旧服务器",
+      "server__at": "2026-08-09",
+      "serverSpec": "4核8G，硬盘500G",
+      "serverSpec__at": "2026-08-09",
+      "cert": "内网自签证书，IT部门统一下发根证书到车间电脑",
+      "cert__at": "2026-08-09",
+      "access": "有root，IT部门开了账号",
+      "access__at": "2026-08-09",
+      "ports": "内网3000端口已开，不对外网暴露",
+      "ports__at": "2026-08-09"
+    },
+    "pre-deploy-compliance": {
+      "exposure": "只有厂区内部员工，外部完全打不开",
+      "exposure__at": "2026-08-09",
+      "icp": "内网不需要备案",
+      "icp__at": "2026-08-09",
+      "dengbao": "客户没提等保要求，这个系统不接入外网",
+      "dengbao__at": "2026-08-09",
+      "dengbaoScope": "不适用",
+      "dengbaoScope__at": "2026-08-09",
+      "personalInfo": "只存员工姓名和工号，不存身份证手机号",
+      "personalInfo__at": "2026-08-09",
+      "dataResidency": "境内，客户自己机房",
+      "dataResidency__at": "2026-08-09",
+      "industryRule": "制造业，客户合规部说没有额外要求",
+      "industryRule__at": "2026-08-09"
+    },
+    "pre-deploy-people": {
+      "oldProcessClose": "2026-09-01 起纸单停用",
+      "oldProcessClose__at": "2026-08-09",
+      "champion": "车间办事员李工，她最烦月底汇总",
+      "champion__at": "2026-08-09",
+      "training": "8月28日下午车间会议室，三个班组长加办事员",
+      "training__at": "2026-08-09",
+      "support": "上线后两周李工每天问一次，有问题找IT张工",
+      "support__at": "2026-08-09",
+      "accounts": "6个账号已建，初始密码写在密码本交给张工",
+      "accounts__at": "2026-08-09"
+    },
+    "post-model-integration": {
+      "integration": "不对接。ERP 是用友的，IT 说接口要走原厂，报价 8 万，本轮不做",
+      "integration__at": "2026-07-20",
+      "sso": "不做单点。车间电脑是共用的，反而要求每次登录",
+      "sso__at": "2026-07-20",
+      "orgSync": "手工维护。全厂用这套的就 6 个人，加个人比同步组织架构快",
+      "orgSync__at": "2026-07-20",
+      "mobile": "电脑为主。车间有一台工位机，班组长在那台上填",
+      "mobile__at": "2026-07-20"
+    }
+  },
+  "notes": {
+    "runs": {
+      "start": {
+        "ok": true,
+        "date": "2026-08-11",
+        "error": "",
+        "note": "命令正常结束",
+        "passed": null
+      },
+      "test": {
+        "ok": true,
+        "date": "2026-08-11",
+        "error": "",
+        "note": "",
+        "passed": 11
+      },
+      "db": {
+        "ok": true,
+        "date": "2026-08-11",
+        "error": "",
+        "note": "",
+        "passed": null
+      },
+      "coldstart": {
+        "ok": true,
+        "date": "2026-08-11",
+        "error": "",
+        "note": "",
+        "passed": null
+      },
+      "deploy": {
+        "ok": true,
+        "date": "2026-08-11",
+        "error": "",
+        "note": "",
+        "passed": null
+      },
+      "rollback": {
+        "ok": true,
+        "date": "2026-08-11",
+        "error": "",
+        "note": "",
+        "passed": null
+      },
+      "backup": {
+        "ok": true,
+        "date": "2026-08-11",
+        "error": "",
+        "note": "",
+        "passed": null
+      },
+      "alert": {
+        "ok": true,
+        "date": "2026-08-11",
+        "error": "",
+        "note": "",
+        "passed": null
+      },
+      "liveUrl": {
+        "ok": true,
+        "date": "2026-08-08",
+        "note": "返回 200"
+      },
+      "demoUrl": {
+        "ok": true,
+        "date": "2026-01-03",
+        "error": "",
+        "note": "返回正常",
+        "passed": null
+      }
+    },
+    "slices": [
+      {
+        "ac": "AC-001",
+        "done": true,
+        "plan": "登录页先做出来，能提交、能报错",
+        "declaredFiles": []
+      },
+      {
+        "ac": "AC-002",
+        "done": true,
+        "plan": "密码存哈希，不存明文",
+        "declaredFiles": []
+      },
+      {
+        "ac": "AC-003",
+        "done": true,
+        "plan": "先做 AC-003 这一条，只改这条相关的文件",
+        "declaredFiles": []
+      },
+      {
+        "ac": "AC-004",
+        "done": true,
+        "plan": "先做 AC-004 这一条，只改这条相关的文件",
+        "declaredFiles": []
+      },
+      {
+        "ac": "AC-005",
+        "done": true,
+        "plan": "先做 AC-005 这一条，只改这条相关的文件",
+        "declaredFiles": []
+      },
+      {
+        "ac": "AC-006",
+        "done": true,
+        "plan": "先做 AC-006 这一条，只改这条相关的文件",
+        "declaredFiles": []
+      },
+      {
+        "ac": "AC-007",
+        "done": true,
+        "plan": "先做 AC-007 这一条，只改这条相关的文件",
+        "declaredFiles": []
+      },
+      {
+        "ac": "AC-008",
+        "done": true,
+        "plan": "先做 AC-008 这一条，只改这条相关的文件",
+        "declaredFiles": []
+      },
+      {
+        "ac": "AC-009",
+        "done": true,
+        "plan": "先做 AC-009 这一条，只改这条相关的文件",
+        "declaredFiles": []
+      },
+      {
+        "ac": "AC-010",
+        "done": true,
+        "plan": "先做 AC-010 这一条，只改这条相关的文件",
+        "declaredFiles": []
+      },
+      {
+        "ac": "AC-011",
+        "done": true,
+        "plan": "先做 AC-011 这一条，只改这条相关的文件",
+        "declaredFiles": []
+      },
+      {
+        "ac": "AC-012",
+        "done": true,
+        "plan": "先做 AC-012 这一条，只改这条相关的文件",
+        "declaredFiles": []
+      },
+      {
+        "ac": "AC-013",
+        "done": true,
+        "plan": "先做 AC-013 这一条，只改这条相关的文件",
+        "declaredFiles": []
+      },
+      {
+        "ac": "AC-014",
+        "done": true,
+        "plan": "先做 AC-014 这一条，只改这条相关的文件",
+        "declaredFiles": []
+      },
+      {
+        "ac": "AC-015",
+        "done": true,
+        "plan": "先做 AC-015 这一条，只改这条相关的文件",
+        "declaredFiles": []
+      },
+      {
+        "ac": "AC-016",
+        "done": true,
+        "plan": "先做 AC-016 这一条，只改这条相关的文件",
+        "declaredFiles": []
+      },
+      {
+        "ac": "AC-017",
+        "done": true,
+        "plan": "先做 AC-017 这一条，只改这条相关的文件",
+        "declaredFiles": []
+      },
+      {
+        "ac": "AC-018",
+        "done": true,
+        "plan": "先做 AC-018 这一条，只改这条相关的文件",
+        "declaredFiles": []
+      },
+      {
+        "ac": "AC-019",
+        "done": true,
+        "plan": "先做 AC-019 这一条，只改这条相关的文件",
+        "declaredFiles": []
+      },
+      {
+        "ac": "AC-020",
+        "done": true,
+        "plan": "先做 AC-020 这一条，只改这条相关的文件",
+        "declaredFiles": []
+      },
+      {
+        "ac": "AC-021",
+        "done": true,
+        "plan": "先做 AC-021 这一条，只改这条相关的文件",
+        "declaredFiles": []
+      },
+      {
+        "ac": "AC-022",
+        "done": true,
+        "plan": "先做 AC-022 这一条，只改这条相关的文件",
+        "declaredFiles": []
+      },
+      {
+        "ac": "AC-023",
+        "done": true,
+        "plan": "先做 AC-023 这一条，只改这条相关的文件",
+        "declaredFiles": []
+      },
+      {
+        "ac": "AC-024",
+        "done": true,
+        "plan": "先做 AC-024 这一条，只改这条相关的文件",
+        "declaredFiles": []
+      },
+      {
+        "ac": "AC-025",
+        "done": true,
+        "plan": "先做 AC-025 这一条，只改这条相关的文件",
+        "declaredFiles": []
+      },
+      {
+        "ac": "AC-026",
+        "done": true,
+        "plan": "先做 AC-026 这一条，只改这条相关的文件",
+        "declaredFiles": []
+      }
+    ],
+    "security": {
+      "auth": true,
+      "filter": true,
+      "sqlParam": true,
+      "escape": true,
+      "hashPwd": true,
+      "upload": true,
+      "session": true,
+      "errorMsg": true
+    },
+    "manualPath": "docs/使用手册.md",
+    "manualHasTechTerms": false,
+    "usage": {
+      "distinctUsers": 6,
+      "records": 38
+    },
+    "releases": [
+      {
+        "id": "C-001",
+        "testsGreen": true,
+        "backedUp": true
+      },
+      {
+        "id": "C-002",
+        "testsGreen": true,
+        "backedUp": true
+      },
+      {
+        "id": "C-003",
+        "testsGreen": true,
+        "backedUp": true
+      },
+      {
+        "id": "C-004",
+        "testsGreen": true,
+        "backedUp": true
+      },
+      {
+        "id": "C-005",
+        "testsGreen": true,
+        "backedUp": true
+      }
+    ],
+    "violations": {}
+  },
+  "projectDescription": ""
+}

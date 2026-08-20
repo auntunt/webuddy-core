@@ -78,18 +78,36 @@ describe('severity', () => {
       assert.strictEqual(effectiveSeverity(infoGate, { mode: 'full' }), 'info');
     });
 
+    // 哪些门禁"离了挂钩就没法查"是包自己说的，内核不认识任何具体门禁号。
+    const hookDependentGates = ['5.2', '5.3'];
+
     it('挂钩依赖门禁：没装挂钩时降为 info', () => {
       const hookGate = { id: '5.2', severity: 'block' };
 
-      assert.strictEqual(effectiveSeverity(hookGate, { mode: 'mvp', hookInstalled: true }), 'block');
-      assert.strictEqual(effectiveSeverity(hookGate, { mode: 'mvp', hookInstalled: false }), 'info');
+      assert.strictEqual(
+        effectiveSeverity(hookGate, { mode: 'mvp', hookInstalled: true, hookDependentGates }),
+        'block'
+      );
+      assert.strictEqual(
+        effectiveSeverity(hookGate, { mode: 'mvp', hookInstalled: false, hookDependentGates }),
+        'info'
+      );
+    });
+
+    it('包没说哪些门禁依赖挂钩时，不擅自降档', () => {
+      const hookGate = { id: '5.2', severity: 'block' };
+
+      assert.strictEqual(effectiveSeverity(hookGate, { mode: 'mvp', hookInstalled: false }), 'block');
     });
 
     it('挂钩降档优先于模式降档', () => {
       const hookGate = { id: '5.3', severity: 'block' };
 
       // learning 模式 + 没装挂钩：挂钩降档优先
-      assert.strictEqual(effectiveSeverity(hookGate, { mode: 'learning', hookInstalled: false }), 'info');
+      assert.strictEqual(
+        effectiveSeverity(hookGate, { mode: 'learning', hookInstalled: false, hookDependentGates }),
+        'info'
+      );
     });
 
     it('缺少 severity 字段时抛错', () => {
@@ -106,7 +124,11 @@ describe('severity', () => {
         { id: '5.2', severity: 'block' },
       ];
 
-      const map = effectiveSeverityMap(gates, { mode: 'learning', hookInstalled: false });
+      const map = effectiveSeverityMap(gates, {
+        mode: 'learning',
+        hookInstalled: false,
+        hookDependentGates: ['5.2'],
+      });
 
       assert.strictEqual(map.get('1.1'), 'block');
       assert.strictEqual(map.get('1.2'), 'info'); // learning 降档

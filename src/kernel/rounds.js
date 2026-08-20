@@ -5,7 +5,7 @@
  * - 项目级 → 会话级(key = sessionId,多轮并存)
  * - 新增认领锁(claims.json)防止多会话改同一文件
  * - 快照与对比算法语义照抄 ref
- * - TEST_HINT/SCHEMA_HINT 改从 pack.hints 读(null = 跳过该维度)
+ * - 各维度的识别正则改从 pack.hints 读(null = 跳过该维度)
  *
  * 适用边界：文件级认领锁只在多会话共享同一 checkout 时有效。
  * multica 场景下每个任务是隔离的 git worktree，.webuddy/ 不共享——

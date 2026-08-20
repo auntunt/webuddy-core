@@ -1,0 +1,83 @@
+{
+  "humanChecks": {
+    "1.6": {
+      "result": "通过",
+      "date": "2026-08-02",
+      "by": "auntlee",
+      "how": "现状动作写到了纸单、车间办事员的 Excel 和月底手工汇总，工具都点名了"
+    },
+    "2.13": {
+      "result": "通过",
+      "date": "2026-08-02",
+      "by": "auntlee",
+      "how": "拿 7 月 12、7 月 19、7 月 26 三张旧领料纸单照字典填，班组和物料编码都填得进去"
+    },
+    "2.14": {
+      "result": "通过",
+      "date": "2026-08-02",
+      "by": "auntlee",
+      "how": "权限表「删除单据」四个岗位全是不能，作废走状态流转，说明写在 02-permissions.md 末尾"
+    }
+  },
+  "answers": {},
+  "notes": {
+    "runs": {
+      "start": {
+        "ok": false,
+        "date": "2026-08-11",
+        "error": "没有 package.json",
+        "note": "",
+        "passed": null
+      },
+      "test": {
+        "ok": false,
+        "date": "2026-08-11",
+        "error": "没有 package.json",
+        "note": "",
+        "passed": null
+      },
+      "db": {
+        "ok": false,
+        "date": "2026-08-11",
+        "error": "没有 package.json",
+        "note": "",
+        "passed": null
+      },
+      "coldstart": {
+        "ok": false,
+        "date": "2026-08-11",
+        "error": "没有 package.json",
+        "note": "",
+        "passed": null
+      },
+      "deploy": {
+        "ok": false,
+        "date": "2026-08-11",
+        "error": "没有 package.json",
+        "note": "",
+        "passed": null
+      },
+      "rollback": {
+        "ok": false,
+        "date": "2026-08-11",
+        "error": "没有 package.json",
+        "note": "",
+        "passed": null
+      },
+      "backup": {
+        "ok": false,
+        "date": "2026-08-11",
+        "error": "没有 package.json",
+        "note": "",
+        "passed": null
+      },
+      "alert": {
+        "ok": false,
+        "date": "2026-08-11",
+        "error": "没有 package.json",
+        "note": "",
+        "passed": null
+      }
+    }
+  }
+}

@@ -9,8 +9,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { loadPack } from '../kernel/pack.js';
-import { evaluate } from '../kernel/evaluate.js';
+import { loadPack, runPackFixtures, mountPack as mount } from '../kernel/pack.js';
 
 export async function run(positionals, flags) {
   const subcommand = positionals[0];
@@ -105,195 +104,51 @@ async function lintPack(packDir, flags) {
   }
 }
 
+/**
+ * 拿包自带的两个样板项目试一遍这个包。
+ *
+ * 判定逻辑全在内核的 runPackFixtures 里（§11.2），这里只负责把它说的话印出来。
+ * 命令行不重写一份判据：包自测在命令行和在服务端得是同一个结论，
+ * 两处各写一套，迟早出现「命令行说过了、界面上说没过」这种没人能解释的情况。
+ */
 async function testPack(packDir, flags) {
   if (!packDir) {
-    console.error('用法: webuddy pack test <packDir>');
+    console.error('用法: webuddy pack test <包目录>');
     process.exit(1);
   }
 
-  console.log(`🧪 运行包测试: ${packDir}`);
+  console.log(`拿样板项目试一遍这个包：${packDir}`);
 
-  // 1. 加载包
-  const result = await loadPack(packDir);
-  if (!result.ok) {
-    console.error(`\n❌ 加载包失败:\n`);
-    for (const error of result.errors) {
-      console.error(`  - ${error}`);
-    }
-    process.exit(1);
-  }
+  const { ok, report } = await runPackFixtures(packDir);
 
-  const pack = result.pack;
+  console.log('');
+  for (const line of report) console.log(line);
 
-  // 2. 查找 fixtures 目录
-  const fixturesDir = path.join(packDir, 'fixtures');
-  if (!fs.existsSync(fixturesDir)) {
-    console.log(`\n⚠️  未找到 fixtures 目录，跳过测试`);
+  if (ok) {
+    console.log('\n这个包过了自测：该过的过了，该红的红了');
     process.exit(0);
   }
-
-  // 3. 运行 fixtures
-  const fixtureResults = await runPackFixtures(packDir, pack);
-
-  // 4. 输出结果
-  console.log(`\n测试结果:`);
-  console.log(`  总计: ${fixtureResults.total}`);
-  console.log(`  通过: ${fixtureResults.passed}`);
-  console.log(`  失败: ${fixtureResults.failed}`);
-
-  if (fixtureResults.failures.length > 0) {
-    console.log(`\n失败的测试:`);
-    for (const failure of fixtureResults.failures) {
-      console.error(`  ❌ ${failure.name}: ${failure.reason}`);
-    }
-    process.exit(1);
-  } else {
-    console.log(`\n✅ 所有测试通过`);
-    process.exit(0);
-  }
+  console.log('\n这个包没过自测，上面每条都得处理完再用');
+  process.exit(1);
 }
 
+/** 把一个包挂到项目上。真正的写入在内核的 mountPack 里，这里只翻译成人话。 */
 async function mountPack(projectDir, packRef, flags) {
-  console.error('pack mount 尚未实现 (P1d 实现了 mountPack 函数)');
-  process.exit(2);
-}
-
-/**
- * 运行担架包的 fixtures 测试。
- *
- * §11.2 runPackFixtures：
- * - 遍历 fixtures/ 目录下的每个子目录
- * - 每个子目录是一个测试用例，包含 facts.json 和 expected.json
- * - 调用 evaluate() 运行判定
- * - 对比实际输出和期望输出
- *
- * @param {string} packDir - 包目录
- * @param {object} pack - 已加载的包对象
- * @returns {object} { total, passed, failed, failures: [{name, reason}] }
- */
-async function runPackFixtures(packDir, pack) {
-  const fixturesDir = path.join(packDir, 'fixtures');
-  const entries = fs.readdirSync(fixturesDir, { withFileTypes: true });
-  const fixtureDirs = entries.filter(e => e.isDirectory()).map(e => e.name);
-
-  const results = {
-    total: fixtureDirs.length,
-    passed: 0,
-    failed: 0,
-    failures: [],
-  };
-
-  // 构建 context
-  const context = {
-    stages: pack.stages,
-    gates: pack.gates,
-    rules: pack.nativeRules || {},
-    gateById: new Map(pack.gates.map(g => [g.id, g])),
-    stageById: new Map(pack.stages.map(s => [s.id, s])),
-  };
-
-  for (const fixtureName of fixtureDirs) {
-    const fixtureDir = path.join(fixturesDir, fixtureName);
-    const factsPath = path.join(fixtureDir, 'facts.json');
-    const expectedPath = path.join(fixtureDir, 'expected.json');
-
-    // 检查必需文件
-    if (!fs.existsSync(factsPath)) {
-      results.failed++;
-      results.failures.push({
-        name: fixtureName,
-        reason: '缺少 facts.json',
-      });
-      continue;
-    }
-
-    if (!fs.existsSync(expectedPath)) {
-      results.failed++;
-      results.failures.push({
-        name: fixtureName,
-        reason: '缺少 expected.json',
-      });
-      continue;
-    }
-
-    // 加载 facts 和期望结果
-    let facts, expected;
-    try {
-      facts = JSON.parse(fs.readFileSync(factsPath, 'utf8'));
-      expected = JSON.parse(fs.readFileSync(expectedPath, 'utf8'));
-    } catch (e) {
-      results.failed++;
-      results.failures.push({
-        name: fixtureName,
-        reason: `JSON 解析失败: ${e.message}`,
-      });
-      continue;
-    }
-
-    // 运行 evaluate
-    let actual;
-    try {
-      actual = evaluate(facts, context);
-    } catch (e) {
-      results.failed++;
-      results.failures.push({
-        name: fixtureName,
-        reason: `evaluate() 失败: ${e.message}`,
-      });
-      continue;
-    }
-
-    // 对比结果
-    const mismatch = compareResults(actual, expected);
-    if (mismatch) {
-      results.failed++;
-      results.failures.push({
-        name: fixtureName,
-        reason: mismatch,
-      });
-    } else {
-      results.passed++;
-    }
+  if (!projectDir || !packRef) {
+    console.error('用法: webuddy pack mount <项目目录> <包目录或包名>');
+    process.exit(1);
+  }
+  if (!fs.existsSync(projectDir)) {
+    console.error(`找不到这个项目目录：${projectDir}`);
+    process.exit(1);
   }
 
-  return results;
-}
-
-/**
- * 对比实际结果和期望结果。
- * 返回不匹配的描述，或 null 表示匹配。
- */
-function compareResults(actual, expected) {
-  // 对比关键字段
-  const fieldsToCheck = ['currentStage', 'mode', 'hookInstalled'];
-
-  for (const field of fieldsToCheck) {
-    if (expected[field] !== undefined && actual[field] !== expected[field]) {
-      return `${field} 不匹配: 期望 ${JSON.stringify(expected[field])}, 实际 ${JSON.stringify(actual[field])}`;
-    }
+  const r = await mount(projectDir, packRef);
+  if (!r.ok) {
+    console.error(r.error);
+    process.exit(1);
   }
-
-  // 对比 counts
-  if (expected.counts) {
-    for (const [key, value] of Object.entries(expected.counts)) {
-      if (actual.counts[key] !== value) {
-        return `counts.${key} 不匹配: 期望 ${value}, 实际 ${actual.counts[key]}`;
-      }
-    }
-  }
-
-  // 对比 verdicts（如果指定了）
-  if (expected.verdicts) {
-    for (const expectedVerdict of expected.verdicts) {
-      const actualVerdict = actual.verdicts.find(v => v.id === expectedVerdict.id);
-      if (!actualVerdict) {
-        return `缺少判定 ${expectedVerdict.id}`;
-      }
-      if (expectedVerdict.r && actualVerdict.r !== expectedVerdict.r) {
-        return `判定 ${expectedVerdict.id} 结果不匹配: 期望 ${expectedVerdict.r}, 实际 ${actualVerdict.r}`;
-      }
-    }
-  }
-
-  return null;
+  console.log(`挂上了：${projectDir} 现在用「${r.packName}」这套检查清单`);
+  console.log('下一步跑 webuddy check，看看现在到哪一步了');
+  process.exit(0);
 }

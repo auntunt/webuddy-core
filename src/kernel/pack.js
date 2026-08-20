@@ -13,11 +13,13 @@
  */
 
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { compileSkill } from './skill-compile.js';
 import { parseProbe } from './probe-dsl.js';
 import { statePath, loadState, saveState } from './state.js';
+import { evaluate } from './evaluate.js';
 
 /**
  * 加载担架包。
@@ -101,6 +103,7 @@ export async function loadPack(packDir) {
 
   // 6. 加载 native-rules.js (如果有)
   let nativeRules = null;
+  let packHooks = { apparentStage: null, upstreamMissing: null };
   const nativePath = path.join(packDir, 'native-rules.js');
   if (fs.existsSync(nativePath)) {
     if (!meta.native) {
@@ -110,6 +113,17 @@ export async function loadPack(packDir) {
         const fileUrl = pathToFileURL(nativePath).href;
         const mod = await import(fileUrl);
         nativeRules = mod.default || mod.RULES || mod;
+        /**
+         * 包还可以顺便导出两个钩子（§5.2）：apparentStage 与 upstreamMissing。
+         *
+         * 必须单独接出来：nativeRules 取的是 mod.RULES，那里面只有门禁号，
+         * 钩子挂在模块顶层。少接这一步的话，包明明写了钩子而内核永远走通用口径，
+         * 而两者都不报错——倒挂检测悄悄退化成"只会漏报"，没人看得出来。
+         */
+        packHooks = {
+          apparentStage: typeof mod.apparentStage === 'function' ? mod.apparentStage : null,
+          upstreamMissing: typeof mod.upstreamMissing === 'function' ? mod.upstreamMissing : null,
+        };
       } catch (e) {
         errors.push(`加载 native-rules.js 失败: ${e.message}`);
       }
@@ -183,7 +197,12 @@ export async function loadPack(packDir) {
     glossary: Object.freeze({ ...glossary }),
     lexicons: Object.freeze({ ...lexicons }),
     hints: Object.freeze({ ...meta.hints }),
+    // 挂钩没装时该降档的门禁清单，由包声明（见 severity.js 的说明）。
+    // 包没写就是空数组：不降任何一条，比误降安全。
+    hookDependentGates: Object.freeze([...(meta.hooks?.dependentGates || [])]),
     nativeRules: nativeRules ? Object.freeze(nativeRules) : null,
+    // §5.2 的两个可选钩子。包没导出就是 null，内核走通用口径。
+    hooks: Object.freeze({ ...packHooks }),
   });
 
   return { ok: true, pack };
@@ -298,15 +317,28 @@ function validateLexicons(ast, lexicons, onError) {
  * @param {string} nameOrDir - 包名或路径
  * @returns {string|null} 包目录路径
  */
-export function resolvePack(nameOrDir) {
+export function resolvePack(nameOrDir, projectDir = null) {
   // 1. 如果是绝对路径或相对路径
-  if (nameOrDir.includes('/') || nameOrDir.includes('\\')) {
+  if (nameOrDir && (nameOrDir.includes('/') || nameOrDir.includes('\\'))) {
     const abs = path.resolve(nameOrDir);
     if (fs.existsSync(path.join(abs, 'pack.json'))) {
       return abs;
     }
     return null;
   }
+
+  /**
+   * 1.5 没指定名字时，看这个项目挂载过什么（§3.4 的顺序：路径 > 已挂载 > 本仓库 > 全局）。
+   *
+   * 这一步不能少：人在项目里跑 check 时不带任何参数，工具得知道他上次挂的是哪个包。
+   * 少了它就只能猜一个默认名，而猜错的表现是"检查项全变了"——比报错难查得多。
+   */
+  if (!nameOrDir && projectDir) {
+    const st = loadState(projectDir);
+    if (st?.pack) return resolvePack(st.pack, null);
+    return null;
+  }
+  if (!nameOrDir) return null;
 
   // 2. 本仓库 packs/
   const localPath = path.join(process.cwd(), 'packs', nameOrDir);
@@ -324,7 +356,14 @@ export function resolvePack(nameOrDir) {
 }
 
 /**
- * 挂载包到项目。
+ * 把一套检查清单挂到项目上。
+ *
+ * state.pack 存的是字符串（§2.3 的 schema 就一个 "pack": "software-engineering"），
+ * 不是 {name, version, dir} 这种对象：resolvePack 会把这个字段原样再喂给自己解一次，
+ * 塞对象进去的话下次 check 会死在 nameOrDir.includes 上——而且是挂载之后才死，
+ * 挂载当场看起来是成功的。
+ *
+ * 挂载时给的是路径的话就存路径，好让 fixtures、临时目录这些不在 packs/ 下的包也能挂。
  *
  * @param {string} projectDir - 项目目录
  * @param {string} packRef - 包名或路径
@@ -333,32 +372,166 @@ export function resolvePack(nameOrDir) {
 export async function mountPack(projectDir, packRef) {
   const packDir = resolvePack(packRef);
   if (!packDir) {
-    return { ok: false, error: `找不到担架包: ${packRef}` };
+    return { ok: false, error: `找不到这套检查清单：${packRef}` };
   }
 
   const result = await loadPack(packDir);
   if (!result.ok) {
-    return { ok: false, error: `加载担架包失败:\n${result.errors.join('\n')}` };
+    return { ok: false, error: `这套检查清单本身有问题，没挂上：\n${result.errors.join('\n')}` };
   }
 
+  const byPath = packRef.includes('/') || packRef.includes('\\');
   const state = loadState(projectDir) || {};
-  state.pack = {
-    name: result.pack.meta.name,
-    version: result.pack.meta.version,
-    dir: packDir,
-  };
+  state.pack = byPath ? packDir : result.pack.meta.name;
+  state.packVersion = result.pack.meta.version;
+  state.mountedAt = new Date().toISOString();
   saveState(projectDir, state);
 
   return { ok: true, packName: result.pack.meta.name };
 }
 
 /**
- * 运行包的 fixtures 测试（实装在 P2，依赖 evaluate）。
+ * 拷贝一整个目录。fixtures 源目录只读，判定会往里追加记录，所以先搬走再跑。
+ *
+ * dot-<名字> 在拷过去的时候还原成 .<名字>：样板项目里有些判据要看隐藏目录
+ * （比如"改动有没有存档"要看 .git），但版本管理工具不肯把这种目录当普通文件收进来，
+ * 于是仓库里存成 dot-git，拷贝时改回来。包自己声明存哪些，内核只认这条命名约定。
+ */
+function copyDir(src, dst) {
+  fs.mkdirSync(dst, { recursive: true });
+  for (const e of fs.readdirSync(src, { withFileTypes: true })) {
+    const s = path.join(src, e.name);
+    const name = e.name.startsWith('dot-') ? `.${e.name.slice(4)}` : e.name;
+    const d = path.join(dst, name);
+    if (e.isDirectory()) copyDir(s, d);
+    else if (e.isFile()) fs.copyFileSync(s, d);
+  }
+}
+
+/** 两个集合的差集，两个方向都要，因为多红和少红都是不合格。 */
+function setDiff(a, b) {
+  return [...a].filter((x) => !b.has(x)).sort();
+}
+
+/**
+ * 跑包自带的样板项目，看这个包判得准不准（§11.2）。
+ *
+ * 两个样板一正一反：
+ *   good/   —— 一个什么都做齐了的项目，现在该管的一条都不该红
+ *   broken/ —— 一个故意留了错的项目，红的必须正好是 expected.json 里点名的那几条
+ *
+ * broken 要求"正好"，不是"至少"：少红了是漏报，多红了是误报，
+ * 后者更该拦——一个动不动就报错的包，人第三次以后就不看它说什么了。
+ *
+ * 两个样板都先整份拷到临时目录再判，判完删掉：判定要往 .webuddy/ 里追加留痕，
+ * 落回源目录会让下次跑的结果跟这次不一样，那就不是测试了。
  *
  * @param {string} packDir - 包目录路径
- * @returns {object} {ok, results?, errors?}
+ * @returns {Promise<object>} {ok, report:string[]}
  */
-export function runPackFixtures(packDir) {
-  // P2 实装占位
-  return { ok: false, errors: ['runPackFixtures 在 P2 实装'] };
+export async function runPackFixtures(packDir) {
+  const report = [];
+  const fixturesDir = path.join(packDir, 'fixtures');
+
+  if (!fs.existsSync(fixturesDir)) {
+    return { ok: false, report: [`这个包没有 fixtures/ 目录，没法自测。至少要有 fixtures/good/ 和 fixtures/broken/ 两个样板项目`] };
+  }
+
+  const loaded = await loadPack(packDir);
+  if (!loaded.ok) {
+    return { ok: false, report: [`包本身就加载不起来，先修这个：`, ...loaded.errors.map((e) => `  ${e}`)] };
+  }
+  const pack = loaded.pack;
+
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), 'webuddy-fixtures-'));
+  let ok = true;
+
+  try {
+    // ---- good/：现在该管的一条都不该红 ----
+    const goodSrc = path.join(fixturesDir, 'good');
+    if (!fs.existsSync(goodSrc)) {
+      ok = false;
+      report.push('缺 fixtures/good/：需要一个"什么都做齐了"的样板项目，用来证明这个包不会冤枉好项目');
+    } else {
+      const goodDir = path.join(work, 'good');
+      copyDir(goodSrc, goodDir);
+      const r = evaluate(goodDir, pack);
+      const hard = r.hardFailsNow || [];
+
+      if (r.counts.failNow === 0 && hard.length === 0) {
+        report.push(`good/ 通过：${r.counts.total} 条检查里现在该管的全过了`);
+      } else {
+        ok = false;
+        report.push(`good/ 没通过：这个样板项目本该全过，但有 ${r.counts.failNow} 条现在该管的没过`);
+        for (const v of hard) {
+          report.push(`  拦路的 ${v.id}：${v.say}`);
+        }
+        for (const v of (r.gates || []).filter((g) => g.r === 'fail' && g.severity !== 'block')) {
+          report.push(`  没过的 ${v.id}：${v.say}`);
+        }
+        report.push('  要么样板项目还缺东西，要么这条判据判错了');
+      }
+      if (r.counts.askNow > 0) {
+        ok = false;
+        report.push(`good/ 还剩 ${r.counts.askNow} 条要人确认。样板项目要把这些预置在 fixtures/good/.webuddy/records.jsonl 里，不然自测每次都停在这儿`);
+        for (const v of (r.gates || []).filter((g) => g.r === 'ask')) {
+          report.push(`  等确认的 ${v.id}：${v.say}`);
+        }
+      }
+    }
+
+    // ---- broken/：红的必须正好是点名的那几条 ----
+    const brokenSrc = path.join(fixturesDir, 'broken');
+    if (!fs.existsSync(brokenSrc)) {
+      ok = false;
+      report.push('缺 fixtures/broken/：需要一个"故意留了错"的样板项目，用来证明这个包真的查得出问题');
+    } else {
+      const expectedPath = path.join(brokenSrc, 'expected.json');
+      if (!fs.existsSync(expectedPath)) {
+        ok = false;
+        report.push('fixtures/broken/ 少了 expected.json。里面写清该红哪几条，格式：{"mustFail":["1.2","3.1"]}');
+      } else {
+        let expected = null;
+        try {
+          expected = JSON.parse(fs.readFileSync(expectedPath, 'utf8'));
+        } catch (e) {
+          ok = false;
+          report.push(`fixtures/broken/expected.json 不是合法的 JSON（${e.message}）`);
+        }
+
+        if (expected) {
+          const must = new Set(Array.isArray(expected.mustFail) ? expected.mustFail : []);
+          if (must.size === 0) {
+            ok = false;
+            report.push('fixtures/broken/expected.json 的 mustFail 是空的。空清单等于什么都不验，把该红的门禁号列出来');
+          }
+
+          const brokenDir = path.join(work, 'broken');
+          copyDir(brokenSrc, brokenDir);
+          const r = evaluate(brokenDir, pack);
+          const actual = new Set((r.gates || []).filter((g) => g.r === 'fail').map((g) => g.id));
+
+          const missed = setDiff(must, actual);
+          const extra = setDiff(actual, must);
+
+          if (missed.length === 0 && extra.length === 0) {
+            report.push(`broken/ 通过：该红的 ${must.size} 条正好全红，没多也没少`);
+          } else {
+            ok = false;
+            if (missed.length) {
+              report.push(`broken/ 漏报 ${missed.length} 条：${missed.join('、')} 本该判不通过，实际没红`);
+            }
+            if (extra.length) {
+              report.push(`broken/ 误报 ${extra.length} 条：${extra.join('、')} 不在该红的名单里，却判了不通过`);
+              report.push('  误报比漏报更要紧：包老是报错，人很快就不看它说什么了');
+            }
+          }
+        }
+      }
+    }
+  } finally {
+    fs.rmSync(work, { recursive: true, force: true });
+  }
+
+  return { ok, report };
 }

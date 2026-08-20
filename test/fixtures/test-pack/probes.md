@@ -11,4 +11,4 @@ all(
 file-exists("src/main.js")
 
 ### 3.2
-count-at-least("test/*.test.js", ".", 5)
+count-at-least("测试清单.md", "表行", 3)

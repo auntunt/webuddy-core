@@ -36,21 +36,24 @@ export function showsInfo(mode) {
 }
 
 /**
- * 挂钩没装时自动降档的那几条。
+ * 挂钩没装时自动降档的那几条，由包自己声明（pack.json 的 hooks.dependentGates）。
  *
- * 这几条的判据全要读轮次和 events.jsonl：没装挂钩时永远判不出结果，
+ * 为什么不写在内核里：这是一份具体的门禁 ID 清单，属于某个行业包的知识。
+ * 内核写死 ['5.2','5.3',…] 的话，换成施工安全包时这几个号要么误命中
+ * 别的检查项、要么一条都不命中，而且没人会发现——降档是静默的。
+ *
+ * 这几条之所以要降档：它们的判据全要读轮次记录，没装挂钩时永远判不出结果，
  * 让它们一直红着等于制造永远清不掉的错误——那比不检查更坏。
  */
-const HOOK_DEPENDENT = new Set(['5.2', '5.3', '5.4', '5.5', '5.7', '5.8']);
 
 /**
  * 学习模式（课程作业）只拦声明为 block 的那些，warn 全降成 info。
  *
- * 这里故意不另列一份「学习模式核心清单」：那份清单跟 stages.js 里
- * 声明 block 的十几条会是同一批，写两遍就等于留了个迟早对不上的隐患。
+ * 这里故意不另列一份「学习模式核心清单」：那份清单跟包里声明 block 的
+ * 那十几条会是同一批，写两遍就等于留了个迟早对不上的隐患。
  * 谁调了某条门禁的档位，学习模式跟着变，这是对的。
  *
- * 课程作业的特征：没有第二个人，没有真数据，目标是学会八步怎么走。
+ * 课程作业的特征：没有第二个人，没有真数据，目标是把流程走一遍。
  * 所以「不做一定出事」的照拦，「强烈建议」的全部退成灰字。
  */
 
@@ -76,10 +79,11 @@ export function isActive(sev, mode) {
  * 计算一条门禁的有效严格度。
  *
  * @param {object} gate - 门禁对象，必须含 id 和 severity
- * @param {object} opts - { mode, hookInstalled }
+ * @param {object} opts - { mode, hookInstalled, hookDependentGates:Set|Array }
  * @returns {string} 'block' | 'warn' | 'info'
  */
-export function effectiveSeverity(gate, { mode = 'mvp', hookInstalled = true } = {}) {
+export function effectiveSeverity(gate, opts = {}) {
+  const { mode = 'mvp', hookInstalled = true, hookDependentGates = null } = opts;
   if (!gate || !gate.severity) {
     throw new Error(`gate 缺 severity 字段：${JSON.stringify(gate)}`);
   }
@@ -87,7 +91,12 @@ export function effectiveSeverity(gate, { mode = 'mvp', hookInstalled = true } =
   const m = normalizeMode(mode);
 
   // 挂钩降档优先：没装挂钩时，这几条永远判不出结果，降到 info 免得一直红着
-  if (!hookInstalled && HOOK_DEPENDENT.has(gate.id)) return 'info';
+  if (!hookInstalled && hookDependentGates) {
+    const dep = hookDependentGates instanceof Set
+      ? hookDependentGates
+      : new Set(hookDependentGates);
+    if (dep.has(gate.id)) return 'info';
+  }
 
   // 学习模式：block 照拦，warn 和 info 一律降成灰字建议
   if (m === 'learning') {

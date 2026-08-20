@@ -1,0 +1,3 @@
+{"ts":"2026-08-02T00:00:00Z","kind":"human-confirm","instanceVersion":0,"by":"auntlee","gateId":"1.6","result":"pass","note":"现状动作写到了纸单、车间办事员的 Excel 和月底手工汇总，工具都点名了"}
+{"ts":"2026-08-02T00:00:00Z","kind":"human-confirm","instanceVersion":0,"by":"auntlee","gateId":"2.13","result":"pass","note":"拿 7 月 12、7 月 19、7 月 26 三张旧领料纸单照字典填，班组和物料编码都填得进去"}
+{"ts":"2026-08-02T00:00:00Z","kind":"human-confirm","instanceVersion":0,"by":"auntlee","gateId":"2.14","result":"pass","note":"权限表「删除单据」四个岗位全是不能，作废走状态流转，说明写在 02-permissions.md 末尾"}

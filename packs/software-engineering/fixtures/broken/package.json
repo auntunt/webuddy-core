@@ -1,0 +1,21 @@
+{
+  "name": "material-requisition",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node src/server.js",
+    "test": "node --test tests/*.test.js",
+    "deploy": "bash ops/deploy.sh",
+    "backup": "bash ops/backup.sh",
+    "rollback": "bash ops/rollback.sh",
+    "db:check": "node -e \"require('fs').accessSync('db/schema.sql')\"",
+    "coldstart": "docker compose config --quiet",
+    "alert:test": "node -e \"console.log('test alert sent')\""
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "better-sqlite3": "9.4.0",
+    "bcrypt": "5.1.1",
+    "zod": "3.22.4"
+  }
+}

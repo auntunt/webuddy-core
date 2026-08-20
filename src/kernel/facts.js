@@ -2,6 +2,8 @@
 // 改造自 ref detect.js + probe-artifacts.js
 
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
 import { readArtifact, hashFile } from './artifact-io.js';
 import { parseFrontmatter, sectionsOf, parseTables, countListItems } from './parse.js';
 
@@ -15,6 +17,12 @@ import { parseFrontmatter, sectionsOf, parseTables, countListItems } from './par
 export function createFactContext(dir, pack, options = {}) {
   const cache = new Map();
   const round = options.round || null;
+  /**
+   * 这次判定实际读过哪些文件。
+   * factsFingerprint 不传 files 时就用它——指纹要能反映"判定依据变了没有"，
+   * 而判定依据就是读过的这些文件，不是项目里全部文件。
+   */
+  const touched = new Set();
 
   /**
    * art 函数 - 惰性加载并解析产物
@@ -25,6 +33,7 @@ export function createFactContext(dir, pack, options = {}) {
     if (cache.has(relPath)) {
       return cache.get(relPath);
     }
+    touched.add(relPath);
 
     const raw = readArtifact(dir, relPath);
 
@@ -64,6 +73,19 @@ export function createFactContext(dir, pack, options = {}) {
       lists.push({ items: listItems });
     }
 
+    /**
+     * mtime 要读真的文件时间。
+     * 早先这里写的是 new Date()（"简化版本"），后果是 fresh-within 这个原语
+     * 永远算出"0 天前"——一份两年没动的交底记录也判通过，那条门禁等于不存在。
+     * 读不到就是 null，让 fresh-within 自己去说"这文件还没有"。
+     */
+    let mtime = null;
+    try {
+      mtime = fs.statSync(path.join(dir, relPath)).mtime;
+    } catch {
+      mtime = null;
+    }
+
     const artifact = {
       exists: true,
       raw,
@@ -72,7 +94,7 @@ export function createFactContext(dir, pack, options = {}) {
       sections,
       tables,
       lists,
-      mtime: new Date() // 简化版本，实际应从文件系统读取
+      mtime,
     };
 
     cache.set(relPath, artifact);
@@ -85,7 +107,8 @@ export function createFactContext(dir, pack, options = {}) {
     lexicons: pack.lexicons || {},
     hints: pack.hints || {},
     round,
-    gateId: null // 由 evaluate 调用时设置
+    gateId: null, // 由 evaluate 调用时设置
+    touchedFiles: () => [...touched].sort(),
   };
 
   return ctx;
@@ -99,8 +122,10 @@ export function createFactContext(dir, pack, options = {}) {
  */
 export function factsFingerprint(ctx, files) {
   const pairs = [];
+  // 不传（或传空）时用这次判定实际读过的文件：指纹的意义是"判定依据变了没有"
+  const list = files && files.length > 0 ? files : (ctx.touchedFiles?.() || []);
 
-  for (const file of files) {
+  for (const file of list) {
     const hash = hashFile(ctx.dir, file);
     if (hash) {
       pairs.push(`${file}:${hash}`);

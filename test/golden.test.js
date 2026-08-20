@@ -1,92 +1,87 @@
 /**
- * golden 文件回归测试（§5.5）。
+ * §5.5 与参照实现对数。
  *
- * golden 文件只有在有人真去比对时才有价值。生成脚本本身不构成回归保护:
- * 它每次都用当前代码重算一遍,判定错了它照样把错的结果写下去。
- * 这个测试是另一半——拿冻结的 golden 和现在的 evaluate 输出对齐。
+ * golden 是拿参照实现自己的 json 命令生成后冻结的（scripts/gen-golden-from-ref.mjs）。
+ * 冻结的意思是：这几个数字此后只许实现去迁就，不许反过来改数字迁就实现。
+ * 一旦这里红了，先假定是新实现判错了，而不是 golden 过期了。
  *
- * 判定逻辑变了而 golden 没变,这里会红。此时先想清楚是判定改对了还是改坏了:
- * 改对了才重新生成 golden(scripts/generate-golden.js),改坏了就修代码。
- * 别为了让这个测试变绿而直接重跑生成脚本——那等于把回归保护关掉。
+ * 只比"影响结论"的字段：counts 的各桶（含 Now 系列）、currentStage、
+ * inversionGap、apparentStage、逐环节状态。不比 say/how 那些人读文案——
+ * 文案本来就要按易用性铁律重写，逐字对齐会把改文案变成改判定。
+ *
+ * 三个素材：
+ *   b-modeling            —— 走到中段的项目，规格领先代码
+ *   construction-project  —— 刚起步的项目，几乎全红
+ *   inverted              —— 自造的倒挂项目，规格在第一环节、代码摸到第五环节
+ *
+ * 模式固定 mvp、挂钩状态由 fixture 里有没有 events.jsonl 决定：
+ * golden 就是在这个口径下生成的，换口径等于换了一套题。
  */
 
-import { describe, it, before } from 'node:test';
-import assert from 'node:assert';
+import { test, before } from 'node:test';
+import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { loadPack } from '../src/kernel/pack.js';
 import { evaluate } from '../src/kernel/evaluate.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const projectRoot = path.resolve(__dirname, '..');
-const packDir = path.join(projectRoot, 'packs/software-engineering');
-const fixturesDir = path.join(packDir, 'fixtures');
-const goldenDir = path.join(projectRoot, 'test/golden');
+const HERE = import.meta.dirname;
 
-/** 和 scripts/generate-golden.js 的 serializable() 必须一致,否则两边永远对不上。 */
-function serializable(result) {
-  const { verdictById, verdicts, ...rest } = result;
-  return {
-    ...rest,
-    verdicts: verdicts.map(({ gate, ...v }) => ({ ...v, stage: gate.stage })),
-  };
+/** golden 文件头上有说明用的 // 注释行，JSON.parse 不认，读的时候去掉。 */
+function readGolden(name) {
+  const raw = fs.readFileSync(path.join(HERE, 'golden', `${name}.json`), 'utf8');
+  return JSON.parse(raw.replace(/^\s*\/\/.*$/gm, ''));
 }
 
-describe('golden 回归', () => {
-  let context;
+const CASES = [
+  { name: 'b-modeling', dir: path.join(HERE, 'fixtures', 'golden-src', 'b-modeling') },
+  { name: 'construction-project', dir: path.join(HERE, 'fixtures', 'golden-src', 'construction-project') },
+  { name: 'inverted', dir: path.join(HERE, 'fixtures', 'inverted') },
+];
 
-  before(async () => {
-    const packResult = await loadPack(packDir);
-    assert.ok(packResult.ok, `加载包失败: ${(packResult.errors || []).join('; ')}`);
-    const pack = packResult.pack;
-    context = {
-      stages: pack.stages,
-      gates: pack.gates,
-      rules: pack.nativeRules || {},
-      gateById: new Map(pack.gates.map((g) => [g.id, g])),
-      stageById: new Map(pack.stages.map((s) => [s.id, s])),
-    };
-  });
+let pack = null;
 
-  const goldenFiles = fs.existsSync(goldenDir)
-    ? fs.readdirSync(goldenDir).filter((f) => f.endsWith('.json'))
-    : [];
+before(async () => {
+  const res = await loadPack(path.join(HERE, '..', 'packs', 'software-engineering'));
+  assert.equal(res.ok, true, `担架包没加载起来：${(res.errors || []).join('；')}`);
+  pack = res.pack;
+});
 
-  it('golden 目录不是空的', () => {
-    // 一个空目录会让下面的用例一条都不跑,而测试报告全绿。
-    assert.ok(goldenFiles.length > 0, 'test/golden/ 里没有 golden 文件');
-  });
+for (const c of CASES) {
+  test(`${c.name}：counts 与参照实现逐字段相等`, () => {
+    const g = readGolden(c.name);
+    const r = evaluate(c.dir, pack, { mode: 'mvp' });
 
-  for (const file of goldenFiles) {
-    const name = file.replace(/\.json$/, '');
-
-    it(`${name} 的判定输出和 golden 一致`, () => {
-      const factsPath = path.join(fixturesDir, name, 'facts.json');
-      assert.ok(fs.existsSync(factsPath), `golden ${file} 找不到对应的 fixture: ${factsPath}`);
-
-      const facts = JSON.parse(fs.readFileSync(factsPath, 'utf8'));
-      const golden = JSON.parse(fs.readFileSync(path.join(goldenDir, file), 'utf8'));
-
-      const actual = serializable(evaluate(facts, context));
-
-      // scannedAt 由 fixture 固定,不是当前时间,所以可以整体比对
-      assert.deepStrictEqual(actual, golden);
-    });
-  }
-
-  it('golden 里的 verdicts 是实数据,不是空壳', () => {
-    // 曾经 verdictById(Map)被 JSON.stringify 写成 {},在 golden 里躺着一个
-    // 对任何回归都不敏感的字段。这条用例盯的就是那类"看着有、其实是空的"字段。
-    for (const file of goldenFiles) {
-      const golden = JSON.parse(fs.readFileSync(path.join(goldenDir, file), 'utf8'));
-      assert.ok(Array.isArray(golden.verdicts), `${file} 的 verdicts 不是数组`);
-      assert.ok(golden.verdicts.length > 0, `${file} 的 verdicts 是空的`);
-      assert.ok(!('verdictById' in golden), `${file} 还留着 verdictById(Map 落盘只会是 {})`);
-      for (const v of golden.verdicts) {
-        assert.ok(v.id, `${file} 有一条 verdict 没有 id`);
-        assert.ok(v.r, `${file} 的 ${v.id} 没有判定结果`);
-      }
+    for (const k of Object.keys(g.counts)) {
+      assert.equal(
+        r.counts[k], g.counts[k],
+        `counts.${k} 对不上：参照实现 ${g.counts[k]}，本实现 ${r.counts[k]}`
+      );
     }
   });
-});
+
+  test(`${c.name}：环节推进与倒挂程度与参照实现相等`, () => {
+    const g = readGolden(c.name);
+    const r = evaluate(c.dir, pack, { mode: 'mvp' });
+
+    assert.equal(r.currentStage, g.currentStage, '走到第几个环节对不上');
+    assert.equal(r.apparentStage, g.apparentStage, '看着像走到第几个环节对不上');
+    assert.equal(r.inversionGap, g.inversionGap, '倒挂几个环节对不上');
+  });
+
+  test(`${c.name}：逐环节的状态与条数与参照实现相等`, () => {
+    const g = readGolden(c.name);
+    const r = evaluate(c.dir, pack, { mode: 'mvp' });
+    const mine = new Map(r.stages.map((s) => [s.id, s]));
+
+    assert.equal(r.stages.length, g.stages.length, '环节个数对不上');
+    for (const gs of g.stages) {
+      const ms = mine.get(gs.id);
+      assert.ok(ms, `少了第 ${gs.id} 个环节`);
+      assert.equal(ms.state, gs.state, `第 ${gs.id} 个环节的状态对不上`);
+      assert.equal(ms.total, gs.total, `第 ${gs.id} 个环节的门禁条数对不上`);
+      assert.equal(ms.passed, gs.passed, `第 ${gs.id} 个环节过了几条对不上`);
+      assert.equal(ms.na, gs.na, `第 ${gs.id} 个环节不适用几条对不上`);
+    }
+  });
+}

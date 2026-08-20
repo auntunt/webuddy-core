@@ -1,0 +1,3 @@
+liaoliao.neigou.local {
+  reverse_proxy localhost:3000
+}
