@@ -1,0 +1,15 @@
+{
+  "name": "test-pack",
+  "version": "1.0.0",
+  "engine": ">=1.0",
+  "title": "测试担架包",
+  "industry": "test",
+  "lexicons": {
+    "boundary": ["为空", "超长", "重复"]
+  },
+  "hints": {
+    "testFile": null,
+    "schemaFile": null
+  },
+  "native": false
+}

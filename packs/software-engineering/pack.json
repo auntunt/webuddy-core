@@ -1,0 +1,11 @@
+{
+  "name": "software-engineering",
+  "version": "0.1.0",
+  "title": "软件工程八步法",
+  "description": "软件工程八步法验收包",
+  "native": true,
+  "hints": {
+    "TEST_HINT": "测试是你唯一能看出软件好没好的通道",
+    "SCHEMA_HINT": "数据表结构（有哪些栏、什么类型）"
+  }
+}
