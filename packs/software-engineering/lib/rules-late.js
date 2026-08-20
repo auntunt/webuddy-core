@@ -159,9 +159,6 @@ export const RULES_LATE = {
     if (r) return r.ok ? { r: P, detail: `${r.date} ${f.eng.testFileCount} 个测试文件` } : { r: F, detail: `测试跑不通：${r.error || '见日志'}` };
     return { r: X, detail: `有 ${f.eng.testFileCount} 个测试文件但还没跑过` };
   },
-  '4.3': (f) => (f.eng.agentRuleFile
-    ? { r: P, detail: `已有 ${f.eng.agentRuleFile}` }
-    : { r: F, detail: '缺一份写给 AI 看的项目规矩文件（CLAUDE.md）。没有它，AI 每开一轮都不知道这个项目的边界在哪' }),
   '4.4': (f) => {
     if (!f.eng.hasGit) return { r: F, detail: '改动还没有存档。让 AI 把项目接上存档工具（git），否则改坏了退不回去——这是最基本的安全网' };
     if (f.eng.commitCount === 0) return { r: F, detail: '存档工具接上了，但一次都没存过。让 AI 存一次档（提交）' };
@@ -186,18 +183,6 @@ export const RULES_LATE = {
     if (problems.length === 0) return { r: P };
     return { r: F, detail: problems.join('；') };
   },
-  '4.7': (f) => {
-    const r = runResult(f, 'db');
-    if (r) return r.ok ? { r: P, detail: `${r.date} 连接正常` } : { r: F, detail: `存数据的地方连不上：${r.error || '见日志'}` };
-    if (!f.eng.hasSchema) return { r: F, detail: '还没在代码里建好数据表。数据字典里那些栏，要变成数据库里真实的表' };
-    return { r: X, detail: '数据表建好了，但还没试过能不能真连上' };
-  },
-  '4.8': (f) => {
-    const r = runResult(f, 'coldstart');
-    if (r) return r.ok ? { r: P, detail: `${r.date} 在空白环境里装起来了` } : { r: F, detail: `在空白环境里装不起来：${r.error || '见日志'}` };
-    if (f.eng.hasDockerCompose) return { r: X, detail: '一键装环境的配置有了，但还没在一台空白电脑上真试过。这是及格线第二条的预演' };
-    return { r: F, detail: '没有一键装环境的配置（docker-compose）。现在只在你自己电脑上能跑，换个人就装不起来' };
-  },
   '4.9': (f) => {
     if (!f.eng.pkg) return { r: NA, detail: '还没有组件清单，无从对照' };
     const OFF_STACK = ['react-redux', 'redux', 'mongoose', 'mongodb', '@apollo/server', 'graphql', 'kubernetes-client', 'styled-components', 'emotion'];
@@ -205,27 +190,6 @@ export const RULES_LATE = {
     return found.length === 0
       ? { r: P }
       : { r: X, detail: `AI 用了约定方案之外的组件：${found.join('、')}。不一定错，但得你点头一次——问它一句为什么非要换，理由说不通就让它换回来` };
-  },
-  /**
-   * 4.10 文件摆放跟模板一致。
-   *
-   * 以前这条只数文件总数（fileCount > 0 就算过），
-   * 一个只放了 readme.txt 的目录也判通过——除了空目录恒为真，等于没判。
-   * 现在按"约定目录在不在"判：这是不读代码就能查的结构事实。
-   * 缺目录只报待改不报不通过：目录结构是约定，不是及格线，
-   * 说清缺哪个让人补，比一刀切判死更有用。
-   */
-  '4.10': (f) => {
-    if (f.eng.fileCount === 0) return { r: F, detail: '项目文件夹是空的，一个文件都还没有' };
-    const miss = [];
-    if (!f.eng.hasSrcDir) miss.push('src/（放代码）');
-    if (!f.eng.hasTestDir) miss.push('tests/（放测试）');
-    if (!f.eng.pkg) miss.push('package.json（记依赖和命令）');
-    if (miss.length === 0) return { r: P, detail: `目录结构齐了，共 ${f.eng.fileCount} 个文件` };
-    return {
-      r: X,
-      detail: `文件摆得跟约定不一样，缺：${miss.join('、')}。摆放一致的意义是换个人接手能猜到东西在哪，也让 AI 少问你"放哪里"`,
-    };
   },
 
   // ───────── 环节五 分步实现（逐切片，这里判整体状况） ─────────
@@ -243,14 +207,6 @@ export const RULES_LATE = {
       ? { r: P, detail: `${slices.length} 轮都是先说计划再动手` }
       : { r: X, detail: `${noPlan} 轮是直接开始改的。让 AI 先说它打算改哪里，你看一眼再放它动手——这一眼是你唯一能拦住它的地方` };
   },
-  '5.3': (f) => fromRounds(f, 'outOfDeclaredScope', null,
-    (v) => `AI 动了这一轮没说要动的文件：${v.slice(0, 5).join('、')}${v.length > 5 ? ' 等' : ''}`),
-  '5.4': (f) => fromRounds(f, 'newDeps', null,
-    (v) => `AI 自己装了没说过的现成组件：${v.join('、')}。这是你自己发现不了的事，所以工具必须拦一次`),
-  '5.5': (f) => fromRounds(f, 'schemaChanged', null,
-    (v) => `数据表结构被改了：${v.join('、')}。要改就回环节二先改数据字典——不是不让改，是别绕过文档偷偷改`),
-  '5.6': (f) => fromRounds(f, 'testsTampered', null,
-    (v) => `原来的测试被改动了：${v.join('、')}。改测试让它变绿是最省力的作弊，也是最贵的——你的仪表盘就是它`),
   '5.7': (f) => {
     // 「只做一件事」的判据：一轮只声明一条验收标准。
     // 不去数改了几个功能——那要读代码。声明了两条以上，就是自己承认了做了多件事。
@@ -272,7 +228,6 @@ export const RULES_LATE = {
     if (!r) return { r: X, detail: '还没试过软件现在能不能跑起来' };
     return r.ok ? { r: P } : { r: F, detail: `软件跑不起来了：${r.error || '见日志'}` };
   },
-  '5.10': (f) => human(f, '5.10'),
   '5.11': (f) => {
     if (f.eng.commitCount === 0) return { r: F, detail: '一次档都还没存过' };
     const ratio = f.eng.commitsWithAC / f.eng.commitCount;
@@ -353,17 +308,6 @@ export const RULES_LATE = {
     }
     return { r: P, detail: `${r.date} 全绿${r.passed ? `（${r.passed} 条）` : ''}，现在项目里有 ${f.eng.testFileCount} 个测试文件` };
   },
-  '6.3': (f) => {
-    const t = f.art.traceability;
-    if (!t.exists) return { r: F, detail: '还没有对照表' };
-    // 「0 行完整」是真的，也是没用的。空表通过意味着一条标准都没被验证过。
-    if (!t.rowCount) return { r: F, detail: '对照表还是空的。每条验收标准都要写清由哪个测试负责验' };
-    const bad = [];
-    if (t.blankRows > 0) bad.push(`${t.blankRows} 行有空格`);
-    if (t.badLevels.length > 0) bad.push(`「层级」这栏只能填 单元 / 集成 / 端到端（分别是：只测一小块、测几块连起来、当成真人从头点一遍），现在填的是：${[...new Set(t.badLevels)].join('、')}`);
-    return bad.length === 0 ? { r: P, detail: `${t.rowCount} 行完整` } : { r: F, detail: bad.join('；') };
-  },
-  '6.4': (f) => human(f, '6.4'),
   /**
    * 6.5 测过出错和极端的情况。
    *
@@ -477,16 +421,6 @@ export const RULES_LATE = {
     if (r) return r.ok ? { r: P, detail: `${url} 能打开（${r.date}）` } : { r: F, detail: `${url} 打不开：${r.error || ''}` };
     return { r: X, detail: `网址写了（${url}），但还没真打开看过一次` };
   },
-  '7.2': (f) => {
-    if (!f.eng.hasDeployScript) return { r: F, detail: '没有「一步把新版本发上去」的办法。现在发版要一步步手工操作，换个人就发不上去' };
-    const r = runResult(f, 'deploy');
-    return r?.ok ? { r: P, detail: `${r.date} 发版成功` } : { r: X, detail: '发版的办法有了，但还没成功跑过一次' };
-  },
-  '7.3': (f) => {
-    if (!f.eng.hasRollbackScript) return { r: F, detail: '没有「退回上一版」的办法。新版本发坏了就只能带着毛病硬撑' };
-    const r = runResult(f, 'rollback');
-    return r?.ok ? { r: P, detail: `${r.date} 退回上一版试过了` } : { r: F, detail: '退回上一版的办法写了，但没真试过。没试过的等于没有' };
-  },
   /**
    * 7.4 是及格线第二条本身：换个人照文档也能装起来。
    *
@@ -511,11 +445,6 @@ export const RULES_LATE = {
     // 走到这里痕迹齐了，但"照文档装起来"这件事本身只有在场的人知道，
     // 所以最后一步交给人确认，不让工具替人点头。
     return human(f, '7.4');
-  },
-  '7.5': (f) => {
-    if (!f.eng.hasBackupScript) return { r: F, detail: '还没有自动备份数据的办法' };
-    const r = runResult(f, 'backup');
-    return r?.ok ? { r: P, detail: `${r.date} 备份在正常跑` } : { r: F, detail: '备份的办法有了，但没确认它真在按时跑。没跑的备份等于没备份' };
   },
   /**
    * 7.6 是及格线第三条本身：数据能恢复。
@@ -572,20 +501,6 @@ export const RULES_LATE = {
     if (h.r !== ASK) return h;
     return { r: ASK, detail: '配一个出事通知（短信、邮件或企微），配完发一条测试通知确认真能收到，然后在这里确认。出事没人知道跟没有监控一样' };
   },
-  '7.8': (f) => {
-    const manual = f.local.notes?.manualPath;
-    // 手册在哪、里面有没有命令行，工具都无从知道：它不在 artifacts 里，是用户自己放的文件。
-    // 原来没记录就判 F，而全仓库没有任何命令会写 notes.manualPath——写完手册也还是红的。
-    // 所以没记录时交给人确认，别拿一条过不去的红灯冒充"还没做"。
-    if (!manual) {
-      const h = human(f, '7.8');
-      if (h.r !== ASK) return h;
-      return { r: ASK, detail: '写份使用手册给用户，然后自己翻一遍：里面不该出现要敲的命令或代码，全写成「点哪里、填什么」。翻过了再确认' };
-    }
-    const hasTech = f.local.notes?.manualHasTechTerms;
-    return hasTech ? { r: F, detail: '手册里出现了要敲的命令或代码。看手册的人不会敲命令，得全改成「点哪里、填什么」' } : { r: P };
-  },
-  '7.9': (f) => human(f, '7.9'),
   '7.10': (f) => {
     const h = f.art.handover;
     if (!h.exists) return { r: F, detail: '还没有交接单。写清四件事：网址怎么访问、新版本怎么发上去、数据怎么备份和恢复、出事找谁（文件在 artifacts/07-handover.md）' };
@@ -619,13 +534,6 @@ export const RULES_LATE = {
     const h = human(f, '7.12');
     if (h.r !== ASK) return h;
     return { r: ASK, detail: '打开正式系统翻一遍数据，把测试时乱填的单子（张三、测试一下、aaa 这种）删干净，然后在这里确认。用户第一次打开看到假数据，会以为整个系统的数都不能信' };
-  },
-  '7.13': (f) => {
-    const url = f.art.handover.url;
-    if (!url) return { r: F, detail: '还没有访问网址' };
-    return f.art.handover.isHttps
-      ? { r: P }
-      : { r: F, detail: '网址是 http 开头，浏览器会显示「不安全」。数据在网上是裸着传的，用户的密码也一样。要换成 https（免费证书够用）' };
   },
   '7.14': (f) => {
     const exposure = f.local.answers?.['pre-deploy-compliance']?.exposure;
@@ -675,10 +583,6 @@ export const RULES_LATE = {
     const h = human(f, '7.18');
     if (h.r !== ASK) return h;
     return { r: ASK, detail: '写一小段演示脚本（文件在 artifacts/07-demo-script.md，模板用 webuddy new 演示脚本 生成）：打开哪个页面、点哪几下、每步说什么，3 分钟内走完。写好后在这里确认' };
-  },
-  '7.19': (f) => {
-    if (f.eng.hasSeedScript) return { r: P, detail: '演示数据有准备办法（单独一份数据文件或一键生成）' };
-    return { r: F, detail: '演示数据还没准备好。让 AI 做一份演示数据：单独存一个文件，或者一个一键生成的小脚本，演示前跑一下就能用' };
   },
   '7.20': (f) => {
     const h = human(f, '7.20');
@@ -780,6 +684,4 @@ export const RULES_LATE = {
     if (!i.count) return { r: NA, detail: '本子还没记东西' };
     return i.open === 0 ? { r: P } : { r: X, detail: `${i.open} 条问题还挂着没处理完。对一下有没有超过当初标的时限（紧急当天、重要三天）` };
   },
-  '8.9': (f) => human(f, '8.9'),
-  '8.10': (f) => human(f, '8.10'),
 };

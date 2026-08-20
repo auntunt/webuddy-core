@@ -5,3 +5,4 @@ ref
 # fixtures 里的 .webuddy/ 是要提交的素材（§11.2 要求 good/ 的人工确认随仓库走），
 # 写成 .webuddy/ 会把它们一起吞掉，而且 git 不允许再用 ! 把被忽略目录里的文件捞回来。
 /.webuddy/
+tmp-*

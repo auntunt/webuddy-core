@@ -25,36 +25,10 @@ function human(f, id) {
 
 export const RULES = {
   // ───────── 环节一 场景定义 ─────────
-  '1.1': (f) => {
-    const s = f.art.scopeCard;
-    if (!s.exists) return { r: F, detail: '还没有场景卡。先回答六件事：谁用、他现在怎么做、系统替代他哪个动作、成功算什么、明确不做什么、多久用一次（文件在 artifacts/01-scope-card.md）' };
-    if (s.allFilled) return { r: P };
-    // 栏名要用卡上印的中文。报「user、currentAction」等于让人去猜是哪一栏，
-    // 而这工具的使用者恰恰是看不懂这些词的人。
-    const CN = {
-      user: '使用者', currentAction: '现状他现在怎么做', replacement: '一句话替代',
-      metric: '成功指标', outOfScope: '明确不做', frequency: '使用频率',
-    };
-    const missing = Object.entries(s.blocks).filter(([, v]) => !v || !v.trim()).map(([k]) => CN[k] || k);
-    return { r: F, detail: `场景卡有 ${s.totalBlocks - s.filledCount} 栏没填：${missing.join('、')}` };
-  },
-  '1.2': (f) => {
-    const n = f.art.scopeCard.outOfScopeCount || 0;
-    if (!f.art.scopeCard.exists) return { r: F, detail: '还没有场景卡' };
-    return n >= 3 ? { r: P, detail: `已写 ${n} 条` } : { r: F, detail: `「明确不做」只有 ${n} 条，至少要 3 条` };
-  },
-  '1.3': (f) => {
-    if (!f.art.scopeCard.exists) return { r: F, detail: '还没有场景卡' };
-    return f.art.scopeCard.metricMeasurable
-      ? { r: P }
-      : { r: F, detail: '成功指标里没有数字。改成「月底汇总从 4 小时降到 10 分钟」这样能量的说法' };
-  },
-  '1.4': (f) => (f.art.scopeCard.replacementFilled ? { r: P } : { r: F, detail: '「一句话替代」这栏还是空的' }),
   '1.5': (f) => (f.art.scopeCard.userLooksLikeName
     ? { r: X, detail: '使用者写成了人名。改成岗位，比如「车间班组长」' }
     : { r: P }),
   '1.6': (f) => (f.art.scopeCard.currentActionHasTool ? { r: P } : human(f, '1.6')),
-  '1.7': (f) => (f.art.scopeCard.frequencyHasMagnitude ? { r: P } : { r: F, detail: '使用频率没写数量级，给个大概次数就行' }),
   // ───────── 环节二 流程与数据建模 ─────────
   '2.1': (f) => {
     const p = f.art.model.process;
@@ -72,40 +46,6 @@ export const RULES = {
     if (!e.cancel) miss.push('谁能取消');
     return miss.length === 0 ? { r: P } : { r: F, detail: `这几个异常没回答：${miss.join('、')}` };
   },
-  /**
-   * 2.3 每个字段有类型和必填标记。
-   *
-   * 以前只查「这两栏有没有空格」。于是必填栏写「看情况」「问班组长」也算标记好了，
-   * 而这一栏存在的唯一用途，是让 AI 知道哪个字段可以留空——
-   * 写成模糊的答案，AI 就只能自己猜，猜错了谁也不知道。
-   * 现在必填栏认死是 / 否两种答案（含几种等价写法）。
-   * 类型栏的合法值由 2.4 专门管，这里只管空不空，不重复报同一件事。
-   */
-  '2.3': (f) => {
-    const d = f.art.model.dictionary;
-    if (!d.exists) return { r: F, detail: '还没有数据字典。就是把单子上每一栏列出来：栏名、填什么类型、必不必填、谁填、什么时候填（文件在 artifacts/02-dictionary.md）' };
-    if (d.fieldCount === 0) return { r: F, detail: '数据字典里还没有字段' };
-    // 缺列和有空格是两件事，得分开说。都判红没错，但话说错了人就改错地方：
-    // 整列没有的时候报「类型栏有空的」，人会去找哪一格空着，找不到，然后觉得工具在瞎报。
-    const missing = [];
-    if (d.noTypeCol) missing.push('类型');
-    if (d.noRequiredCol) missing.push('必填');
-    if (missing.length) {
-      return { r: F, detail: `数据字典缺「${missing.join('」「')}」这一列，给表加上，每个字段都填` };
-    }
-    const bad = [];
-    if (d.typeBlank) bad.push('类型');
-    if (d.requiredBlank) bad.push('必填');
-    if (bad.length) return { r: F, detail: `${bad.join('、')}栏有空的` };
-    const vague = d.badRequired || [];
-    if (vague.length) {
-      return {
-        r: F,
-        detail: `必填栏有 ${vague.length} 处写的不是是或否，而是「${[...new Set(vague)].slice(0, 3).join('」「')}」。这一栏是给 AI 看的硬规矩：写「是」它就加校验，写「否」它就允许留空；写「看情况」它只能自己猜，猜的结果你查不出来`,
-      };
-    }
-    return { r: P, detail: `${d.fieldCount} 个字段` };
-  },
   '2.4': (f) => {
     const d = f.art.model.dictionary;
     const bad = d.badTypes || [];
@@ -122,15 +62,6 @@ export const RULES = {
     // 报错要顺手给出合法值。只说"用了清单外的类型"，人得回去翻文档才知道能填什么。
     if (bad.length === 0) return { r: P };
     return { r: F, detail: `用了清单外的类型：${[...new Set(bad)].join('、')}。只能用：${ALLOWED_FIELD_TYPES.join(' ')}` };
-  },
-  '2.5': (f) => {
-    const d = f.art.model.dictionary;
-    if (!d.exists) return { r: F, detail: '还没有数据字典' };
-    if (!d.fieldCount) return { r: F, detail: '数据字典还没有字段' };
-    const bad = [];
-    if (d.whoBlank) bad.push('谁填');
-    if (d.whenBlank) bad.push('什么时候填');
-    return bad.length === 0 ? { r: P } : { r: F, detail: `${bad.join('、')}栏有空的` };
   },
   '2.6': (f) => {
     const d = f.art.model.dictionary;
@@ -154,15 +85,6 @@ export const RULES = {
       ? { r: P }
       : { r: F, detail: `单子走到这几个状态就卡住出不来了：${s.deadEnd.join('、')}。要么给它写个下一步，要么标明「到这儿就算办完了」` };
   },
-  '2.9': (f) => (f.art.model.states.exists
-    ? (f.art.model.states.finalMarked ? { r: P } : { r: F, detail: '没标明哪些状态算办完了。比如「已入库」「已作废」走到就结束了，标出来' })
-    : { r: F, detail: '还没写单据的流转规则' }),
-  '2.10': (f) => {
-    const s = f.art.model.states;
-    if (!s.exists) return { r: F, detail: '还没写单据的流转规则' };
-    if (!s.transitionCount) return { r: F, detail: '流转表还是空的' };
-    return s.actorBlank ? { r: F, detail: '流转表里「谁能做」有空的。每一步都要写清哪个岗位有权推进' } : { r: P, detail: `${s.transitionCount} 条流转规则` };
-  },
   '2.11': (f) => {
     const p = f.art.model.permissions;
     if (!p.exists) return { r: F, detail: '还没有权限表。画一张表：左边列岗位，上面列操作（看、填、改、批、导出），每一格填能 / 不能 / 有条件（文件在 artifacts/02-permissions.md）' };
@@ -177,13 +99,6 @@ export const RULES = {
     }
     return { r: P, detail: `${p.roleCount} 个岗位 × ${p.opCount} 个操作，一格没漏` };
   },
-  '2.12': (f) => {
-    const p = f.art.model.permissions;
-    if (!p.exists) return { r: F, detail: '还没有权限表' };
-    if (!p.hasConditional) return { r: NA, detail: '没有「有条件」的格子' };
-    return p.conditionsExplained ? { r: P } : { r: F, detail: '写了「有条件」但没说清是什么条件' };
-  },
-  '2.13': (f) => human(f, '2.13'),
   '2.14': (f) => {
     const p = f.art.model.permissions;
     if (!p.exists) return { r: F, detail: '还没有权限表' };
@@ -218,7 +133,6 @@ export const RULES = {
     const sample = hits.slice(0, 5).map((h) => `${h.code}「${h.words.join('/')}」`).join('，');
     return { r: F, detail: `用了没法判真假的形容词：${sample}${hits.length > 5 ? ` 等 ${hits.length} 处` : ''}` };
   },
-  '3.3': (f) => human(f, '3.3'),
   '3.4': (f) => {
     const s = f.art.spec.features;
     if (!s.exists) return { r: F, detail: '还没有功能清单' };
@@ -237,11 +151,6 @@ export const RULES = {
     return { r: P, detail: `反例 ${s.negativeCount} 条` };
   },
   '3.7': (f) => human(f, '3.7'),
-  '3.8': (f) => {
-    const nf = f.art.spec.nonFunctional;
-    if (!nf.exists) return { r: F, detail: '还没写这七件事：数据大概多少条、点一下要多久出来、数据留几年、什么时间段必须能用、手机还是电脑用、内网还是外网、界面用什么语言（文件在 artifacts/03-nonfunctional.md）' };
-    return nf.missing.length === 0 ? { r: P } : { r: F, detail: `这几项没填：${nf.missing.join('、')}` };
-  },
   '3.9': (f) => {
     const n = f.art.spec.features.acCount;
     if (n === 0) return { r: F, detail: '还没有验收标准' };
