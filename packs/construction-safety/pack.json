@@ -1,0 +1,17 @@
+{
+  "name": "construction-safety",
+  "version": "1.0.0",
+  "engine": ">=1.0",
+  "title": "施工安全检查SOP",
+  "industry": "construction",
+  "lexicons": {},
+  "hints": {
+    "caseMark": null,
+    "assertMark": null,
+    "depsFile": null,
+    "depsPaths": null,
+    "testCmd": null,
+    "startCmd": null
+  },
+  "native": false
+}
