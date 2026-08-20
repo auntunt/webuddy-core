@@ -1,0 +1,10 @@
+{
+  "name": "webuddy-core",
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}
