@@ -5,6 +5,16 @@ import path from 'node:path';
 import os from 'node:os';
 import { claim, startRound, endRound, abortRound, roundStatus, snapshot } from '../src/kernel/rounds.js';
 
+// 软件工程包声明的识别方式。内核自己不认识 package.json 也不认识 test(/expect(，
+// 所以每个用到这些维度的测试都得把 hints 传进来——这正是要验的那件事。
+const SE_HINTS = {
+  testFile: '\\.test\\.js$',
+  caseMark: '(^|[^\\w.])(test|it|describe)\\s*(\\.\\s*\\w+\\s*)?\\(',
+  assertMark: '(^|[^\\w.])(assert|expect|should)\\s*(\\.\\s*\\w+\\s*)?\\(',
+  depsFile: 'package.json',
+  depsPaths: ['dependencies', 'devDependencies'],
+};
+
 test('snapshot 拍快照', () => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wb-round-'));
   try {
@@ -14,12 +24,26 @@ test('snapshot 拍快照', () => {
       devDependencies: { jest: '^29.0.0' }
     }));
 
-    const snap = snapshot(tmpDir);
+    const snap = snapshot(tmpDir, SE_HINTS);
     assert.ok(snap.at);
     assert.ok(snap.files['app.js']);
     assert.strictEqual(snap.deps.length, 2);
     assert.ok(snap.deps.includes('lodash'));
     assert.ok(snap.deps.includes('jest'));
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true });
+  }
+});
+
+test('snapshot 包没声明 depsFile 就不采集外部件', () => {
+  // 不是采成 0 条，是这一维度整个不参与——内核不猜别人的清单格式。
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wb-round-'));
+  try {
+    fs.writeFileSync(path.join(tmpDir, 'package.json'), JSON.stringify({
+      dependencies: { lodash: '^4.0.0' }
+    }));
+    const snap = snapshot(tmpDir);
+    assert.deepStrictEqual(snap.deps, []);
   } finally {
     fs.rmSync(tmpDir, { recursive: true });
   }
@@ -33,11 +57,21 @@ test('snapshot 测试文件计数', () => {
       test('sub', () => { expect(2-1).toBe(1); });
     `);
 
-    const hints = { testFile: /\.test\.js$/ };
-    const snap = snapshot(tmpDir, hints);
+    const snap = snapshot(tmpDir, SE_HINTS);
     assert.ok(snap.cases['app.test.js']);
     assert.strictEqual(snap.cases['app.test.js'].cases, 2);
     assert.strictEqual(snap.cases['app.test.js'].asserts, 2);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true });
+  }
+});
+
+test('snapshot 包没声明 caseMark 就不数检查点', () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wb-round-'));
+  try {
+    fs.writeFileSync(path.join(tmpDir, 'app.test.js'), "test('a', () => expect(1).toBe(1));");
+    const snap = snapshot(tmpDir, { testFile: '\\.test\\.js$' });
+    assert.deepStrictEqual(snap.cases, {});
   } finally {
     fs.rmSync(tmpDir, { recursive: true });
   }
@@ -158,14 +192,14 @@ test('endRound 检测新依赖', () => {
       dependencies: { lodash: '^4.0.0' }
     }));
 
-    startRound(tmpDir, 'session1', { files: ['package.json'] });
+    startRound(tmpDir, 'session1', { files: ['package.json'], hints: SE_HINTS });
 
     // 添加新依赖
     fs.writeFileSync(path.join(tmpDir, 'package.json'), JSON.stringify({
       dependencies: { lodash: '^4.0.0', axios: '^1.0.0' }
     }));
 
-    const result = endRound(tmpDir, 'session1');
+    const result = endRound(tmpDir, 'session1', { hints: SE_HINTS });
     assert.strictEqual(result.ok, true);
     assert.ok(result.violations.some(v => v.kind === 'newDeps' && v.say.includes('axios')));
   } finally {
@@ -183,8 +217,7 @@ test('endRound 检测测试篡改', () => {
       test('c', () => { expect(3).toBe(3); });
     `);
 
-    const hints = { testFile: /\.test\.js$/ };
-    startRound(tmpDir, 'session1', { files: ['app.test.js'], hints });
+    startRound(tmpDir, 'session1', { files: ['app.test.js'], hints: SE_HINTS });
 
     // 删除一个测试
     fs.writeFileSync(path.join(tmpDir, 'app.test.js'), `
@@ -192,7 +225,7 @@ test('endRound 检测测试篡改', () => {
       test('b', () => { expect(2).toBe(2); });
     `);
 
-    const result = endRound(tmpDir, 'session1', { hints });
+    const result = endRound(tmpDir, 'session1', { hints: SE_HINTS });
     assert.strictEqual(result.ok, true);
     assert.ok(result.violations.some(v => v.kind === 'testsTampered'));
   } finally {

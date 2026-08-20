@@ -5,10 +5,10 @@ import path from 'node:path';
 import os from 'node:os';
 import { resolveProjectDir, normalize, handleHook } from '../src/kernel/hook.js';
 
-test('resolveProjectDir 识别项目根', () => {
+test('resolveProjectDir 认自己的 .webuddy/', () => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wb-hook-'));
   try {
-    fs.writeFileSync(path.join(tmpDir, 'package.json'), '{}');
+    fs.mkdirSync(path.join(tmpDir, '.webuddy'));
     const resolved = resolveProjectDir(tmpDir);
     assert.strictEqual(resolved, fs.realpathSync(tmpDir));
   } finally {
@@ -21,6 +21,22 @@ test('resolveProjectDir 无标志物', () => {
   try {
     const resolved = resolveProjectDir(tmpDir);
     assert.strictEqual(resolved, null);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true });
+  }
+});
+
+test('resolveProjectDir 光有 package.json 不算——那是包的知识，不是内核的', () => {
+  // 内核不认识任何行业的工程文件名。没 init 过的目录不该被写入 .webuddy/。
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wb-hook-'));
+  try {
+    fs.writeFileSync(path.join(tmpDir, 'package.json'), '{}');
+    assert.strictEqual(resolveProjectDir(tmpDir), null);
+    // 调用方明确把包的标志物传进来才认
+    assert.strictEqual(
+      resolveProjectDir(tmpDir, { marks: ['package.json'] }),
+      fs.realpathSync(tmpDir),
+    );
   } finally {
     fs.rmSync(tmpDir, { recursive: true });
   }
@@ -114,7 +130,7 @@ test('normalize agent 参数', () => {
 test('handleHook 成功写入', () => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wb-hook-'));
   try {
-    fs.writeFileSync(path.join(tmpDir, 'package.json'), '{}');
+    fs.mkdirSync(path.join(tmpDir, '.webuddy'));
     const payload = JSON.stringify({
       tool_name: 'Edit',
       tool_input: { file_path: 'test.js' },
@@ -157,7 +173,7 @@ test('handleHook 无法定位项目', () => {
 test('handleHook 多条事件累积', () => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wb-hook-'));
   try {
-    fs.writeFileSync(path.join(tmpDir, 'package.json'), '{}');
+    fs.mkdirSync(path.join(tmpDir, '.webuddy'));
 
     handleHook(JSON.stringify({
       tool_name: 'Edit',

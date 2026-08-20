@@ -123,6 +123,7 @@ function extractGates(body) {
         description: m[3].trim(),
         type: null,
         severity: null,
+        hint: '',
         detectLogic: '',
         question: '',
         evidence: '',
@@ -130,11 +131,15 @@ function extractGates(body) {
     } else if (current) {
       const type = line.match(/^判据类型[:：]\s*(auto|human)/);
       const severity = line.match(/^严格度[:：]\s*(block|warn|info)/);
+      // 「提示」是红灯那一行下面的「怎么办」。不收的话报错只有前两段
+      // （哪条没过、为什么没过），第三段"接下来做什么"就是空的（§2.5 报错三段式）。
+      const hint = line.match(/^提示[:：]\s*(.+)$/);
       const detect = line.match(/^如何探测[:：]\s*(.+)$/);
       const question = line.match(/^提问[:：]\s*(.+)$/);
       const evidence = line.match(/^需要凭据[:：]\s*(.+)$/);
       if (type) current.type = type[1];
       if (severity) current.severity = severity[1];
+      if (hint) current.hint = hint[1].trim();
       if (detect) current.detectLogic += detect[1].trim() + '\n';
       if (question) current.question = question[1].trim();
       if (evidence) current.evidence = evidence[1].trim();
@@ -198,6 +203,7 @@ function buildGates(gates, stages) {
       mode: g.type,
       severity: g.severity || inferSeverity(g, stage),
       desc: g.description,
+      hint: g.hint,
       // 生成缺省提问组（human 门禁）
       defaultPrompt: g.type === 'human' ? buildDefaultPrompt(g) : null,
     };

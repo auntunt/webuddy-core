@@ -5,6 +5,12 @@ import path from 'node:path';
 import os from 'node:os';
 import { appendEvent, readEvents, summarizeEvents } from '../src/kernel/events.js';
 
+// 什么命令算"跑测试"、什么算"起服务"由包声明。内核不认识 npm/pytest/cargo。
+const SE_HINTS = {
+  testCmd: '(^|[\\s;&|])(npm|pnpm|yarn|bun)\\s+(run\\s+)?(test|test:unit|vitest|jest)\\b|(^|[\\s;&|])(vitest|jest|pytest|go\\s+test|cargo\\s+test|mvn\\s+test|phpunit)\\b',
+  startCmd: '(^|[\\s;&|])(npm|pnpm|yarn|bun)\\s+(run\\s+)?(dev|start|serve)\\b',
+};
+
 test('appendEvent 追加事件', () => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wb-events-'));
   try {
@@ -101,7 +107,7 @@ test('summarizeEvents 汇总事件', () => {
     appendEvent(tmpDir, { kind: 'run', cmd: 'npm run dev', exit: 0 });
 
     const events = readEvents(tmpDir);
-    const summary = summarizeEvents(events);
+    const summary = summarizeEvents(events, SE_HINTS);
 
     assert.strictEqual(summary.count, 5);
     assert.strictEqual(summary.editCount, 3);
@@ -128,7 +134,7 @@ test('summarizeEvents 测试识别', () => {
     appendEvent(tmpDir, { kind: 'run', cmd: 'npm run build', exit: 0 });
 
     const events = readEvents(tmpDir);
-    const summary = summarizeEvents(events);
+    const summary = summarizeEvents(events, SE_HINTS);
 
     assert.strictEqual(summary.testRunCount, 3);
     assert.strictEqual(summary.lastTest.exit, 0);
@@ -137,8 +143,22 @@ test('summarizeEvents 测试识别', () => {
   }
 });
 
+test('summarizeEvents 包没声明 testCmd 就一条测试都不认', () => {
+  // 漏认只是少一条痕迹；错认成"测试跑过了"是发假绿灯。
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wb-events-'));
+  try {
+    appendEvent(tmpDir, { kind: 'run', cmd: 'npm test', exit: 0 });
+    const summary = summarizeEvents(readEvents(tmpDir), {});
+    assert.strictEqual(summary.runCount, 1);
+    assert.strictEqual(summary.testRunCount, 0);
+    assert.strictEqual(summary.lastTest, null);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true });
+  }
+});
+
 test('summarizeEvents 空事件', () => {
-  const summary = summarizeEvents([]);
+  const summary = summarizeEvents([], SE_HINTS);
   assert.strictEqual(summary.count, 0);
   assert.strictEqual(summary.editCount, 0);
   assert.strictEqual(summary.testRunCount, 0);

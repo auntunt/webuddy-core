@@ -68,20 +68,28 @@ export function readEvents(projectDir, { limit = 800 } = {}) {
   return out;
 }
 
-/** 命令里认出测试。宁可漏认不可错认：错认成"测试跑过了"是发假绿灯。 */
-const TEST_CMD = /(^|[\s;&|])(npm|pnpm|yarn|bun)\s+(run\s+)?(test|test:unit|vitest|jest)\b|(^|[\s;&|])(vitest|jest|pytest|go\s+test|cargo\s+test|mvn\s+test|phpunit)\b/;
-const START_CMD = /(^|[\s;&|])(npm|pnpm|yarn|bun)\s+(run\s+)?(dev|start|serve)\b/;
-
 /**
  * 把事件流水归纳成事实。返回的是"看得见的痕迹"，不含判断。
  *
- * lastTestRun 只在退出码为 0 时才算通过——没有退出码的记录一概不算，
+ * lastTest 只在退出码为 0 时才算通过——没有退出码的记录一概不算，
  * 因为"跑过但不知道结果"和"跑过并且通过了"之间的差别，正是这条门禁的全部意义。
+ *
+ * 哪种命令算"跑测试"、哪种算"起服务"，由包声明（pack.hints 的 testCmd/startCmd）。
+ * 内核原来把 `npm test|pytest|cargo test|mvn test` 这串写死在这里，
+ * 那是软件生态的命令名；换成施工安全包时"跑一遍"根本不是敲命令。
+ * 包没声明就一条都不认：漏认只是少一条痕迹，
+ * 错认成"测试跑过了"是发假绿灯——宁可漏认不可错认。
+ *
+ * @param {object[]} events
+ * @param {object} hints - pack.hints {testCmd, startCmd}
  */
-export function summarizeEvents(events) {
+export function summarizeEvents(events, hints = {}) {
+  const testCmd = hints.testCmd ? new RegExp(hints.testCmd) : null;
+  const startCmd = hints.startCmd ? new RegExp(hints.startCmd) : null;
+
   const runs = events.filter((e) => e.kind === 'run' && e.cmd);
-  const testRuns = runs.filter((e) => TEST_CMD.test(String(e.cmd)));
-  const startRuns = runs.filter((e) => START_CMD.test(String(e.cmd)));
+  const testRuns = testCmd ? runs.filter((e) => testCmd.test(String(e.cmd))) : [];
+  const startRuns = startCmd ? runs.filter((e) => startCmd.test(String(e.cmd))) : [];
   const withExit = (list) => list.filter((e) => Number.isInteger(e.exit));
 
   const lastOf = (list) => (list.length ? list[list.length - 1] : null);

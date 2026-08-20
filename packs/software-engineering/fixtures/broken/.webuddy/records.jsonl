@@ -1,25 +1,21 @@
 {"ts":"2026-01-01T00:00:00Z","kind":"human-confirm","gateId":"1.6","result":"pass","by":"fixture","note":"fixture 预置","instanceVersion":0}
 {"ts":"2026-01-01T00:00:00Z","kind":"human-confirm","gateId":"2.13","result":"pass","by":"fixture","note":"fixture 预置","instanceVersion":0}
-{"ts":"2026-01-01T00:00:00Z","kind":"human-confirm","gateId":"2.14","result":"pass","by":"fixture","note":"fixture 预置","instanceVersion":0}
 {"ts":"2026-01-01T00:00:00Z","kind":"human-confirm","gateId":"3.3","result":"pass","by":"fixture","note":"fixture 预置","instanceVersion":0}
 {"ts":"2026-01-01T00:00:00Z","kind":"human-confirm","gateId":"3.5","result":"pass","by":"fixture","note":"fixture 预置","instanceVersion":0}
 {"ts":"2026-01-01T00:00:00Z","kind":"human-confirm","gateId":"3.7","result":"pass","by":"fixture","note":"fixture 预置","instanceVersion":0}
 {"ts":"2026-01-01T00:00:00Z","kind":"human-confirm","gateId":"5.10","result":"pass","by":"fixture","note":"fixture 预置","instanceVersion":0}
 {"ts":"2026-01-01T00:00:00Z","kind":"human-confirm","gateId":"6.4","result":"pass","by":"fixture","note":"fixture 预置","instanceVersion":0}
 {"ts":"2026-01-01T00:00:00Z","kind":"human-confirm","gateId":"6.10","result":"pass","by":"fixture","note":"fixture 预置","instanceVersion":0}
-{"ts":"2026-01-01T00:00:00Z","kind":"human-confirm","gateId":"7.4","result":"pass","by":"fixture","note":"fixture 预置","instanceVersion":0}
-{"ts":"2026-01-01T00:00:00Z","kind":"human-confirm","gateId":"7.6","result":"pass","by":"fixture","note":"fixture 预置","instanceVersion":0}
 {"ts":"2026-01-01T00:00:00Z","kind":"human-confirm","gateId":"7.8","result":"pass","by":"fixture","note":"fixture 预置","instanceVersion":0}
 {"ts":"2026-01-01T00:00:00Z","kind":"human-confirm","gateId":"7.9","result":"pass","by":"fixture","note":"fixture 预置","instanceVersion":0}
 {"ts":"2026-01-01T00:00:00Z","kind":"human-confirm","gateId":"7.10","result":"pass","by":"fixture","note":"fixture 预置","instanceVersion":0}
 {"ts":"2026-01-01T00:00:00Z","kind":"human-confirm","gateId":"7.11","result":"pass","by":"fixture","note":"fixture 预置","instanceVersion":0}
 {"ts":"2026-01-01T00:00:00Z","kind":"human-confirm","gateId":"7.14","result":"pass","by":"fixture","note":"fixture 预置","instanceVersion":0}
 {"ts":"2026-01-01T00:00:00Z","kind":"human-confirm","gateId":"7.15","result":"pass","by":"fixture","note":"fixture 预置","instanceVersion":0}
-{"ts":"2026-01-01T00:00:00Z","kind":"human-confirm","gateId":"7.16","result":"pass","by":"fixture","note":"fixture 预置","instanceVersion":0}
 {"ts":"2026-01-01T00:00:00Z","kind":"human-confirm","gateId":"7.17","result":"pass","by":"fixture","note":"fixture 预置","instanceVersion":0}
 {"ts":"2026-01-01T00:00:00Z","kind":"human-confirm","gateId":"7.18","result":"pass","by":"fixture","note":"fixture 预置","instanceVersion":0}
 {"ts":"2026-01-01T00:00:00Z","kind":"human-confirm","gateId":"7.20","result":"pass","by":"fixture","note":"fixture 预置","instanceVersion":0}
-{"ts":"2026-01-01T00:00:00Z","kind":"human-confirm","gateId":"8.1","result":"pass","by":"fixture","note":"fixture 预置","instanceVersion":0}
 {"ts":"2026-01-01T00:00:00Z","kind":"human-confirm","gateId":"8.9","result":"pass","by":"fixture","note":"fixture 预置","instanceVersion":0}
 {"ts":"2026-01-01T00:00:00Z","kind":"human-confirm","gateId":"8.10","result":"pass","by":"fixture","note":"fixture 预置","instanceVersion":0}
 {"ts":"2026-01-03T00:00:00Z","kind":"human-confirm","gateId":"7.12","result":"pass","by":"fixture","note":"翻过正式库 customers/orders 两张表，只有 db/seeds/demo-data.sql 那两条示例数据","instanceVersion":0}
+{"ts":"2026-08-20T14:00:10.462Z","instanceVersion":0,"kind":"evaluate","scope":"all","counts":{"pass":71,"na":0,"fix":0,"fail":7,"ask":3,"failNow":2,"fixNow":0,"askNow":0},"verdict":"blocked","gateIds":{"fail":["1.1","1.2","4.4","4.5","4.6","5.11","6.11","7.19"],"ask":["5.1","5.2","5.3","5.4","5.5","5.6","5.7","5.8","6.9"]}}

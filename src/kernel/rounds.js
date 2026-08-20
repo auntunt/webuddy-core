@@ -40,25 +40,63 @@ function fingerprint(dir, rel) {
 }
 
 /**
- * 数测试文件里的用例和断言。
- * 数的是 test( / it( / describe( 和 assert( / expect( / should(
+ * 读"这个项目依赖了哪些外部件"，用来发现有人顺手装了新东西。
+ *
+ * 从哪个文件读、读文件里哪几个位置，都由包声明：
+ *   depsFile  —— 文件名，比如 package.json / requirements.txt
+ *   depsPaths —— JSON 里的取值路径，比如 ['dependencies','devDependencies']
+ * 包没声明就返回空数组：这一维度不参与反作弊。
+ * 内核不认识 package.json 里的字段叫什么——那是 npm 的知识。
+ *
+ * 只支持 JSON。非 JSON 的清单文件（requirements.txt 那种）由包自己的
+ * native 判据去读，内核不猜格式：猜错了会把"没装新依赖"报成绿灯。
  */
-function countCases(dir, rel) {
+function readDeps(dir, hints) {
+  const file = hints.depsFile;
+  const paths = Array.isArray(hints.depsPaths) ? hints.depsPaths : [];
+  if (!file || paths.length === 0) return [];
+  try {
+    const raw = fs.readFileSync(path.join(dir, file), 'utf8');
+    const doc = JSON.parse(raw);
+    const names = new Set();
+    for (const key of paths) {
+      const bag = key.split('.').reduce((o, k) => (o && typeof o === 'object' ? o[k] : undefined), doc);
+      if (bag && typeof bag === 'object') for (const n of Object.keys(bag)) names.add(n);
+    }
+    return [...names].sort();
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * 数"检查点"和"断言"各有多少个，用来发现测试被偷偷改小。
+ *
+ * 两个正则都从 pack.hints 来（caseMark / assertMark），内核不认识 test( 和 expect(——
+ * 那是软件测试框架的写法，施工安全包的"检查点"长的是别的样子。
+ * 包没声明就返回 null：数不出来 = 这一维度不参与反作弊，
+ * 而不是数成 0（数成 0 会让"从 12 条变 0 条"这种真作弊看起来像没变化）。
+ */
+function countCases(dir, rel, caseMark, assertMark) {
+  if (!caseMark && !assertMark) return null;
   try {
     const raw = fs.readFileSync(path.join(dir, rel), 'utf8');
-    const cases = raw.match(/(^|[^\w.])(test|it|describe)\s*(\.\s*\w+\s*)?\(/g);
-    const asserts = raw.match(/(^|[^\w.])(assert|expect|should)\s*(\.\s*\w+\s*)?\(/g);
-    return { cases: cases ? cases.length : 0, asserts: asserts ? asserts.length : 0 };
+    const count = (re) => (re ? (raw.match(new RegExp(re.source, 'g')) || []).length : 0);
+    return { cases: count(caseMark), asserts: count(assertMark) };
   } catch {
     return null;
   }
 }
 
 /**
- * 拍快照：文件指纹 + 依赖清单 + 测试用例数。
+ * 拍快照：文件指纹 + 外部件清单 + 检查点数。
+ *
+ * 三样东西的识别方式全从 pack.hints 来，包没声明的维度直接不采集。
+ * depsFile/depsPaths 是后加的：原来这里写死读 package.json 的
+ * dependencies/devDependencies，那是 npm 生态的事，内核不该认识它。
  *
  * @param {string} dir - 项目目录
- * @param {object} hints - pack.hints {testFile, schemaFile}
+ * @param {object} hints - pack.hints {testFile, schemaFile, caseMark, assertMark, depsFile, depsPaths}
  * @returns {object} {at, files, cases, deps}
  */
 export function snapshot(dir, hints = {}) {
@@ -67,33 +105,23 @@ export function snapshot(dir, hints = {}) {
   const cases = {};
 
   const testHint = hints.testFile ? new RegExp(hints.testFile) : null;
+  const caseMark = hints.caseMark ? new RegExp(hints.caseMark) : null;
+  const assertMark = hints.assertMark ? new RegExp(hints.assertMark) : null;
 
   for (const f of files) {
     const p = fingerprint(dir, f);
     if (p) prints[f] = p;
     if (p && testHint && testHint.test(f)) {
-      cases[f] = countCases(dir, f);
+      const c = countCases(dir, f, caseMark, assertMark);
+      if (c) cases[f] = c;
     }
-  }
-
-  // 读取依赖
-  const pkgPath = path.join(dir, 'package.json');
-  let deps = [];
-  try {
-    if (fs.existsSync(pkgPath)) {
-      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-      const allDeps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
-      deps = Object.keys(allDeps).sort();
-    }
-  } catch {
-    deps = [];
   }
 
   return {
     at: new Date().toISOString(),
     files: prints,
     cases,
-    deps,
+    deps: readDeps(dir, hints),
   };
 }
 

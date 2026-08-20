@@ -1,47 +1,24 @@
 /**
- * 产物解析：把 artifacts/*.md 读成结构化事实。
+ * 文本解析：把 markdown 读成结构化事实。
  *
- * 纪律：只看结构，不看语义。
- *   看的是——某个栏位有没有填、表格有没有空格、类型在不在允许清单里、条目数量。
+ * 纪律一：只看结构，不看语义。
+ *   看的是——某个栏位有没有填、表格有没有空格、条目数量。
  *   不看的是——填得对不对、业务逻辑通不通。
+ *   业务正确性只能靠 human 门禁项（比如"用三条真实数据回填"）。
  *
- * 为什么必须这样：门禁判据不许依赖读代码（20-环节定稿.md 规则二）。
- * 同理，判据也不许依赖"理解业务"。工具能判的是形式完整性，
- * 业务正确性只能靠 human 门禁项（比如 2.13 用三条真实数据回填）。
+ * 纪律二：这里不许出现任何一个行业才认识的词。
+ *   曾经这个文件里有三样东西违反了它：允许的字段类型清单、22 个禁用形容词、
+ *   允许的测试层级——都是某个包的门禁知识，被内核抄了一份。
+ *   抄的那份还是死的（内核里没有调用者，真正在跑的是包自己 lib/ 下同名的
+ *   那份），所以直接删掉了。
+ *   换个行业的包，"友好/快速/稳定"这类词表要由那个包自己给，
+ *   内核只提供"给我词表我来找"的机制——而机制已经有了，
+ *   就是 DSL 的 lexicon-hit 原语 + pack.json 的 lexicons。
+ *
+ * 这个文件现在是纯函数模块，不碰文件系统——原来的 loadArtifact/loadFrozen
+ * 一并删了：它们把 'artifacts/' 这个目录名写死在内核里，而产物放哪由包定；
+ * 真正在用的读取入口是 artifact-io.js（路径从包的产物声明来）。
  */
-
-import fs from 'node:fs';
-import path from 'node:path';
-
-/** 数据字典允许的字段类型，来自 06-产物模板.md */
-export const ALLOWED_FIELD_TYPES = [
-  '文本', '长文本', '数字', '金额', '日期', '日期时间',
-  '选择', '多选', '图片', '附件', '是否',
-];
-
-/** 验收标准里的禁用词表，22 个。来自 07-门禁清单.md 门禁 3.2 */
-// 词表以 07-门禁清单.md §3.2 为权威，两份源码合并后去掉「及时」。
-// 去掉的原因：「及时处理」「及时通知」在业务文档里是正常中文，加进去会打掉大量没问题的标准。
-// 词表需要新增时，同步修改 07-门禁清单.md 的「禁用词表」说明行。
-export const BANNED_WORDS = [
-  '友好', '快', '快速', '慢', '稳定', '可靠', '合理', '方便',
-  '灵活', '简单', '高效', '智能', '优化', '完善', '良好', '适当',
-  '尽量', '美观', '流畅', '健壮', '易用', '简洁',
-];
-
-/** 追溯对照表允许的层级 */
-export const ALLOWED_TEST_LEVELS = ['单元', '集成', '端到端'];
-
-/** 读文件，不存在返回 null。任何异常都当"不存在"处理，探测器不应该因为一个坏文件崩掉。 */
-export function readIfExists(filePath) {
-  try {
-    const st = fs.statSync(filePath);
-    if (!st.isFile()) return null;
-    return fs.readFileSync(filePath, 'utf8');
-  } catch {
-    return null;
-  }
-}
 
 /** 解析 YAML frontmatter（只支持平铺的 key: value，够用且不引依赖） */
 export function parseFrontmatter(text) {
@@ -165,53 +142,17 @@ export function countListItems(text) {
   return text.split('\n').filter((l) => /^\s*(?:[-*+]|\d+[.、)])\s+\S/.test(l) && isFilled(l)).length;
 }
 
-/** 文本里有没有可测量的数字（用于「成功指标可测量」） */
-export function hasMeasurableNumber(text) {
-  if (!text) return false;
-  return /\d/.test(text) && /(分钟|小时|天|周|月|次|条|个|人|%|％|元|万|降到|提到|减少|从.*到)/.test(text);
-}
-
-/** 命中了哪些禁用词 */
-export function findBannedWords(text) {
-  if (!text) return [];
-  return BANNED_WORDS.filter((w) => text.includes(w));
-}
-
-/** 抽取所有 AC- 编号 */
-export function extractACCodes(text) {
-  if (!text) return [];
-  const out = new Set();
-  for (const m of text.matchAll(/\bAC-?(\d{1,4})\b/gi)) out.add(`AC-${m[1].padStart(3, '0')}`);
-  return [...out];
-}
-
-/** 产物文件的统一读取入口 */
-export function loadArtifact(projectDir, filename) {
-  const p = path.join(projectDir, 'artifacts', filename);
-  const raw = readIfExists(p);
-  if (raw === null) return { exists: false, path: p, meta: {}, body: '', sections: new Map(), tables: [] };
-  const { meta, body } = parseFrontmatter(raw);
-  return {
-    exists: true,
-    path: p,
-    raw,
-    meta,
-    body,
-    sections: sectionsOf(body),
-    tables: parseTables(body),
-  };
-}
-
-/** 读 .frozen（已冻结产物的哈希清单），格式：每行 `文件名  哈希` */
-export function loadFrozen(projectDir) {
-  const raw = readIfExists(path.join(projectDir, 'artifacts', '.frozen'));
-  const map = new Map();
-  if (!raw) return map;
-  for (const line of raw.split('\n')) {
-    const t = line.trim();
-    if (!t || t.startsWith('#')) continue;
-    const parts = t.split(/\s+/);
-    if (parts.length >= 2) map.set(parts[0], parts[1]);
-  }
-  return map;
+/**
+ * 按给定词表找命中的词。词表由调用方给，内核不自带任何一份。
+ *
+ * 这是上面「纪律二」说的那个机制：谁认识这些词，谁把词表传进来。
+ * DSL 侧对应 lexicon-hit 原语，词表来自 pack.json 的 lexicons。
+ *
+ * @param {string} text
+ * @param {string[]} words - 要找的词，来自包
+ * @returns {string[]} 命中的词
+ */
+export function findWords(text, words) {
+  if (!text || !Array.isArray(words)) return [];
+  return words.filter((w) => w && text.includes(w));
 }

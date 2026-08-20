@@ -341,6 +341,14 @@ function evidenceAttached(args, ctx) {
 function roundClean(args, ctx) {
   const dim = args[0].value; // files/deps/schema/tests
 
+  /**
+   * 没开轮次的时候,这条原语两种判法都是错的:
+   *   判绿 = 把"我不知道"写成"没问题",是假绿灯;
+   *   判红 = 把"我没看着"写成"你越界了",是误报（包自测会抓出来）。
+   * 正确答案是 ask（"判不了,你自己过一遍"）,而 DSL 只有 pass|fail 两态,
+   * 给不出第三种。所以走轮次的门禁必须挂 native,不能只靠这条原语。
+   * 这里维持判绿是为了不制造误报,真正的把关由 native 前置做。
+   */
   if (!ctx.round) {
     return { r: 'pass', detail: '本轮未开轮次,跳过' };
   }

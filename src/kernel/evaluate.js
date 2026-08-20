@@ -419,11 +419,17 @@ function detectRoundWarnings(roundData) {
  *
  * 命名警告（§5.2）：ref 的 blockers 指的是这个，不是失败的 block 门禁。
  * 本内核里失败的 block 门禁叫 hardFailsNow，两者不许混叫。
+ *
+ * notYet = 还没走到的环节号。这些环节的问题一律不拦路，理由和
+ * buildHumanPending 里那条一样：环节五的问题在环节一根本没法答，
+ * 摆上去只会让刚开工的项目第一屏就是一堆"等你确认"，然后整个项目
+ * 被判成 blocked——问的人答不了，判的人也判不动。
  */
-function findPromptsPending(prompts, answers, verdictById) {
+function findPromptsPending(prompts, answers, verdictById, notYet = new Set()) {
   const out = [];
   for (const p of prompts || []) {
     if (!p.blockUntilAnswered) continue;
+    if (notYet.has(p.stage)) continue;
     // 该门禁已经判过了（不是 ask），这组问题就不再拦路
     const v = verdictById.get(p.id);
     if (v && v.r !== 'ask') continue;
@@ -566,7 +572,7 @@ export function evaluate(
   ];
 
   const hardFailsNow = active.filter((v) => v.severity === 'block' && v.r === 'fail' && now(v));
-  const promptsPending = findPromptsPending(pack.prompts, state.answers || {}, verdictById);
+  const promptsPending = findPromptsPending(pack.prompts, state.answers || {}, verdictById, notYet);
 
   const counts = {
     total: active.length,

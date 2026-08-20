@@ -1,7 +1,21 @@
 /**
  * 八环节 + 门禁项 + 关键节点提问：全部数据化。
  *
- * 这个文件是 webuddy-console 的单一事实源。
+ * ⚠ 搬进 webuddy-core 之后，这个文件不再是门禁模式和严格度的事实源。
+ *
+ * 内核的 loadPack 只读 SKILL.md（compileSkill 从 `判据类型：auto|human` 和
+ * `严格度：block|warn|info` 两行编译门禁表），从来不 import 这个文件的 STAGES
+ * 来定 mode/severity。这里唯一还在被读的是 `artifacts` 字段——
+ * lib/probe-artifacts.js 拿它推导全部产物文件名。
+ *
+ * 所以下面每一行的 mode / severity / check 都只是从 ref 抄过来的历史记录，
+ * 改它们不会有任何效果。P3 收口时 SKILL.md 里有 23 条门禁的 mode 与这里不一致
+ * （比如 2.1 这里写 human、SKILL.md 是 auto），不一致的那一方是这里，
+ * 生效的是 SKILL.md。要改门禁模式，去改 SKILL.md。
+ *
+ * 没把这 23 行对齐过来，是因为对齐会让人以为这个文件又变成事实源了——
+ * 而它一旦被当成事实源，下一个人就会改这里然后奇怪为什么不生效。
+ *
  * 数据来自 20-环节定稿.md（环节定义）与 07-门禁清单.md（门禁逐项）。
  *
  * 每个门禁项的 `check` 字段只是给人看的判据代号，**代码不读它**。
@@ -44,7 +58,7 @@ export const STAGES = [
       { id: '1.2', mode: 'auto', severity: 'block', check: 'outOfScopeAtLeast3', desc: '明确不做清单至少三条', hint: '想一下：别人问"能不能顺便管一下 X"，你怎么回答？把三个"不做"写下来' },
       { id: '1.3', mode: 'auto', severity: 'block', check: 'metricMeasurable', desc: '成功指标可测量', hint: '"提升效率"不算。要写成"月底汇总从 4 小时降到 10 分钟"这样带数字的' },
       { id: '1.4', mode: 'auto', severity: 'block', check: 'oneSentenceReplacement', desc: '一句话替代描述填写完整', hint: '填这句：上线后，___ 的 ___ 这个动作被系统替代了' },
-      { id: '1.5', mode: 'auto', severity: 'warn', check: 'userIsRoleNotName', desc: '使用者是岗位不是姓名', hint: '写"车间班组长"，不要写"张经理"' },
+      { id: '1.5', mode: 'human', severity: 'warn', check: 'userIsRoleNotName', desc: '使用者是岗位不是姓名', hint: '写"车间班组长"，不要写"张经理"' },
       { id: '1.6', mode: 'human', severity: 'warn', check: 'currentActionHasTools', desc: '现状动作写到具体工具', hint: '只写"手工处理"不够，要说清是纸单、微信群还是 Excel' },
       { id: '1.7', mode: 'auto', severity: 'warn', check: 'frequencyHasMagnitude', desc: '使用频率有数量级', hint: '每天大概多少次？给个数量级就行' },
       // 这里曾经有一条 1.8「三个真实使用者各访谈一次」，已经删掉。
@@ -62,20 +76,20 @@ export const STAGES = [
     question: '做的是什么？',
     artifacts: ['02-process.md', '02-dictionary.md', '02-states.md', '02-permissions.md'],
     gates: [
-      { id: '2.1', mode: 'auto', severity: 'warn', check: 'processStepsHaveActor', desc: '正常流程每步有「谁做什么」', hint: '把"系统处理"改成具体某个岗位做什么' },
-      { id: '2.2', mode: 'auto', severity: 'warn', check: 'threeExceptionsAnswered', desc: '三个异常问题全部回答', hint: '一直不处理怎么办、填错了怎么改、谁能取消——三问都要答' },
+      { id: '2.1', mode: 'human', severity: 'warn', check: 'processStepsHaveActor', desc: '正常流程每步有「谁做什么」', hint: '把"系统处理"改成具体某个岗位做什么' },
+      { id: '2.2', mode: 'human', severity: 'warn', check: 'threeExceptionsAnswered', desc: '三个异常问题全部回答', hint: '一直不处理怎么办、填错了怎么改、谁能取消——三问都要答' },
       // 2.3-2.6 是数据字典的骨架。字段的类型、必填、谁填、几条对几条，
       // 这四件定错了，后面存进去的数据就是错的，返工要重灌数据。
       { id: '2.3', mode: 'auto', severity: 'block', check: 'fieldsHaveTypeAndRequired', desc: '每个字段有类型和必填标记', hint: '数据字典里类型栏或必填栏有空的' },
-      { id: '2.4', mode: 'auto', severity: 'block', check: 'fieldTypesInAllowedList', desc: '字段类型在允许清单内', hint: '只能用这些：文本、长文本、数字、金额、日期、日期时间、选择、多选、图片、附件、是否' },
+      { id: '2.4', mode: 'human', severity: 'block', check: 'fieldTypesInAllowedList', desc: '字段类型在允许清单内', hint: '只能用这些：文本、长文本、数字、金额、日期、日期时间、选择、多选、图片、附件、是否' },
       { id: '2.5', mode: 'auto', severity: 'block', check: 'fieldsHaveFillerAndTiming', desc: '每个字段有「谁填、什么时候填」', hint: '每个字段都要说清谁在哪一步填它' },
-      { id: '2.6', mode: 'auto', severity: 'block', check: 'entityRelationsDeclared', desc: '两类数据之间的关系已写明', hint: '有两类以上数据就要说清关系：一张单配多条明细，还是两边都能对多个' },
-      { id: '2.7', mode: 'auto', severity: 'warn', check: 'everyStateReachable', desc: '每个状态都有办法走进去', hint: '有个状态谁也走不进去，写了等于没有。对一遍流转表' },
-      { id: '2.8', mode: 'auto', severity: 'warn', check: 'everyNonFinalStateHasExit', desc: '单子不会卡在某个状态出不来', hint: '单子走到某个状态就卡住了。要么写个下一步，要么标明「到这儿就算办完了」' },
+      { id: '2.6', mode: 'human', severity: 'block', check: 'entityRelationsDeclared', desc: '两类数据之间的关系已写明', hint: '有两类以上数据就要说清关系：一张单配多条明细，还是两边都能对多个' },
+      { id: '2.7', mode: 'human', severity: 'warn', check: 'everyStateReachable', desc: '每个状态都有办法走进去', hint: '有个状态谁也走不进去，写了等于没有。对一遍流转表' },
+      { id: '2.8', mode: 'human', severity: 'warn', check: 'everyNonFinalStateHasExit', desc: '单子不会卡在某个状态出不来', hint: '单子走到某个状态就卡住了。要么写个下一步，要么标明「到这儿就算办完了」' },
       { id: '2.9', mode: 'auto', severity: 'warn', check: 'finalStatesMarked', desc: '标明了哪些状态算办完了', hint: '哪些状态走到就结束了（已入库、已作废），标出来' },
       { id: '2.10', mode: 'auto', severity: 'warn', check: 'transitionsHaveActor', desc: '流转表每行都写了「谁能做」', hint: '每一步都要说清哪个岗位有权推进' },
       // 空着的权限格上线后就是默认允许，这是会出事的那一类，所以拦。
-      { id: '2.11', mode: 'auto', severity: 'block', check: 'permissionMatrixNoBlank', desc: '权限表每一格都填了，没有空格', hint: '每个岗位每个操作都要填：能、不能、或有条件。空着的格上线后就成了默认允许' },
+      { id: '2.11', mode: 'human', severity: 'block', check: 'permissionMatrixNoBlank', desc: '权限表每一格都填了，没有空格', hint: '每个岗位每个操作都要填：能、不能、或有条件。空着的格上线后就成了默认允许' },
       { id: '2.12', mode: 'auto', severity: 'warn', check: 'conditionalPermissionsSpecified', desc: '填「有条件」的地方写清了是什么条件', hint: '写了"有条件"就必须说清什么条件，比如「只能改自己班组的」' },
       { id: '2.13', mode: 'human', severity: 'warn', check: 'threeRealRecordsBackfilled', desc: '拿三张真实旧单子试填过，都填得进去', hint: '这道关最要紧。找三张真的旧单据，照数据字典一栏一栏填，看栏位够不够、类型对不对。填不进去的那一栏就是设计漏了' },
       { id: '2.14', mode: 'human', severity: 'warn', check: 'deletePermissionReviewed', desc: '删除权限已审视', hint: '业务系统里真删数据几乎总是错的。「删除」一栏基本都该是"不能"，改成作废状态' },
@@ -100,7 +114,7 @@ export const STAGES = [
       { id: '3.7', mode: 'human', severity: 'warn', check: 'keyPagesHaveWireframe', desc: '主要几个页面画过草图', hint: '把主要页面上有哪些栏、哪些按钮画一下，手画拍张照也行。不画，AI 就自己猜' },
       { id: '3.8', mode: 'auto', severity: 'warn', check: 'nonFunctionalSevenFields', desc: '七件容易漏的事都说清了', hint: '数据大概多少条、点一下要多久出来、数据留几年、什么时间段必须能用、手机还是电脑用、内网还是外网、界面什么语言——七件都要填。漏一件，上线后就是一次返工' },
       // 提示语本来就写着"只提示不阻断"，以前代码不认这句话，现在认了。
-      { id: '3.9', mode: 'auto', severity: 'info', check: 'acCountInRange', desc: '标准总数在合理区间（20–100）', hint: '少于 20 条通常是想漏了，多于 100 条通常是范围没收住。这条只提示不阻断' },
+      { id: '3.9', mode: 'human', severity: 'info', check: 'acCountInRange', desc: '标准总数在合理区间（20–100）', hint: '少于 20 条通常是想漏了，多于 100 条通常是范围没收住。这条只提示不阻断' },
       { id: '3.10', mode: 'auto', severity: 'warn', check: 'noACOnOutOfScope', desc: '无验收标准覆盖到 out-of-scope 内容', hint: '范围在偷偷扩张：场景卡说不做的东西，验收标准里出现了' },
     ],
   },
@@ -139,20 +153,20 @@ export const STAGES = [
       // 这一环节大半条目要靠轮次和挂钩才看得见。挂钩没装时，
       // 5.2/5.3/5.4/5.5/5.7/5.8 会被自动降到 info（见 severity.js），
       // 免得一堆永远判不出来的条目红在那里。
-      { id: '5.1', mode: 'auto', severity: 'warn', check: 'sliceDeclaresAC', desc: '这一小步说清了做哪条验收标准', hint: '开工前先说清这一小步做的是哪条验收标准' },
-      { id: '5.2', mode: 'auto', severity: 'warn', check: 'planBeforeAct', desc: 'AI 动手前先说了要怎么改，你看过才放它动', hint: 'AI 没说一声就直接开始改了。要先让它说打算改哪、怎么改，你看过再放行' },
+      { id: '5.1', mode: 'human', severity: 'warn', check: 'sliceDeclaresAC', desc: '这一小步说清了做哪条验收标准', hint: '开工前先说清这一小步做的是哪条验收标准' },
+      { id: '5.2', mode: 'human', severity: 'warn', check: 'planBeforeAct', desc: 'AI 动手前先说了要怎么改，你看过才放它动', hint: 'AI 没说一声就直接开始改了。要先让它说打算改哪、怎么改，你看过再放行' },
       { id: '5.3', mode: 'auto', severity: 'warn', check: 'changesInScope', desc: 'AI 只改了它说要改的地方', hint: 'AI 顺手动了它没提过的地方。改多了你看不出来，出问题也不知道从哪查' },
       { id: '5.4', mode: 'auto', severity: 'warn', check: 'noUndeclaredDeps', desc: 'AI 没偷偷加进新的现成组件', hint: 'AI 自己装了个现成组件。这是你根本发现不了的事，所以工具必须拦一次' },
       { id: '5.5', mode: 'auto', severity: 'warn', check: 'schemaUnchanged', desc: '没动数据表的结构', hint: '数据表结构（有哪些栏、什么类型）被悄悄改了。要改得回环节二改数据字典——不是不让改，是别偷偷改' },
       // 改测试和把原来的测试弄绿掉，是这套东西里唯一不能让的两件：
       // 测试是不读代码的人唯一的眼睛，动了它，后面所有绿灯都不算数。
       { id: '5.6', mode: 'auto', severity: 'block', check: 'testsNotTampered', desc: '原来的测试没被动过', hint: 'AI 把测试改了，好让它显示通过。测试是你唯一能看出软件好没好的通道，改测试等于把体温计调低' },
-      { id: '5.7', mode: 'auto', severity: 'warn', check: 'oneThingPerRound', desc: '本轮只做一件事', hint: '一轮里做了三个功能，出问题定位不了' },
-      { id: '5.8', mode: 'auto', severity: 'warn', check: 'noDriveByRefactor', desc: '没有"顺手优化"', hint: 'AI 说"我顺便把别处也优化了一下"。原本好用的地方被动过，坏了你也不会想到是它' },
-      { id: '5.9', mode: 'auto', severity: 'warn', check: 'appRuns', desc: '软件可运行', hint: '起不来了' },
+      { id: '5.7', mode: 'human', severity: 'warn', check: 'oneThingPerRound', desc: '本轮只做一件事', hint: '一轮里做了三个功能，出问题定位不了' },
+      { id: '5.8', mode: 'human', severity: 'warn', check: 'noDriveByRefactor', desc: '没有"顺手优化"', hint: 'AI 说"我顺便把别处也优化了一下"。原本好用的地方被动过，坏了你也不会想到是它' },
+      { id: '5.9', mode: 'human', severity: 'warn', check: 'appRuns', desc: '软件可运行', hint: '起不来了' },
       { id: '5.10', mode: 'human', severity: 'warn', check: 'sliceClickable', desc: '这一小步做出来的东西你能点开看', hint: '只有内部逻辑、没有能点的界面，你没法验收。每一小步都要能点' },
       { id: '5.11', mode: 'auto', severity: 'info', check: 'commitMsgHasAC', desc: '每次存档写清了对应哪条验收标准', hint: '存档说明只写"更新"这种，以后查不出这次改了什么、为什么改' },
-      { id: '5.12', mode: 'auto', severity: 'block', check: 'existingTestsStillGreen', desc: '原来能过的测试还都能过', hint: '新功能把原来好的地方改坏了' },
+      { id: '5.12', mode: 'human', severity: 'block', check: 'existingTestsStillGreen', desc: '原来能过的测试还都能过', hint: '新功能把原来好的地方改坏了' },
     ],
   },
   {
@@ -166,14 +180,14 @@ export const STAGES = [
       // 6.1 和 6.2 是「用测试代替读代码」这件事的全部：标准有人管、管的都过了。
       // 这两条塌了，整套判定就没有依据可言，所以只有它们真拦。
       { id: '6.1', mode: 'auto', severity: 'block', check: 'everyACHasTest', desc: '每条验收标准至少配一个测试', hint: '对照表里有标准没配测试' },
-      { id: '6.2', mode: 'auto', severity: 'block', check: 'allTestsPass', desc: '全部测试都通过', hint: '有测试没通过。测试是你唯一能看出软件好没好的通道，没全过就不能上线' },
+      { id: '6.2', mode: 'human', severity: 'block', check: 'allTestsPass', desc: '全部测试都通过', hint: '有测试没通过。测试是你唯一能看出软件好没好的通道，没全过就不能上线' },
       { id: '6.3', mode: 'auto', severity: 'warn', check: 'traceabilityNoBlank', desc: '标准与测试的对照表没有空格', hint: '对照表里有空格。这张表就是「哪条标准由哪个测试管」的一览' },
       { id: '6.4', mode: 'human', severity: 'warn', check: 'testsActuallyAssert', desc: '测试真的在核对结果，不是走个过场', hint: '抽两成打开看：它有没有真的核对结果对不对。AI 会写只跑一遍、什么都不核对的测试来骗过门禁' },
       // 这一条原来是四条（异常/边界/越权/乱跳状态）。拆得太细，
       // 非技术人员看到的是四盏分不清差别的红灯，实际要做的是同一件事：
       // 把"不顺利"的情况也测一遍。合成一条，判定仍然逐项查（rules-late.js '6.5'）。
-      { id: '6.5', mode: 'auto', severity: 'warn', check: 'unhappyPathsTested', desc: '测过出错和极端的情况', hint: '测的全是一切顺利的情况。填错了、没权限、空的、超长的、乱跳状态——这些也要测' },
-      { id: '6.9', mode: 'auto', severity: 'warn', check: 'noTestFileTamperThisRound', desc: '这一轮没动过测试', hint: '这一轮又改测试了' },
+      { id: '6.5', mode: 'human', severity: 'warn', check: 'unhappyPathsTested', desc: '测过出错和极端的情况', hint: '测的全是一切顺利的情况。填错了、没权限、空的、超长的、乱跳状态——这些也要测' },
+      { id: '6.9', mode: 'human', severity: 'warn', check: 'noTestFileTamperThisRound', desc: '这一轮没动过测试', hint: '这一轮又改测试了' },
       // 这条只能靠人。八条底线做没做要看代码，规则二不许判据依赖读代码。
       // 原来标 auto，而工具没有任何路子能拿到这八条的结果——等于永远红着。
       { id: '6.10', mode: 'human', severity: 'warn', check: 'securityBaseline', desc: '八条安全底线都过了', hint: '八条底线：改数据前要登录、每人只看得到自己该看的、防数据库被套话、防页面被塞脚本、密码存成不可还原的乱码、上传限类型和大小、久不操作自动退出、报错不把内部细节抖出去' },
@@ -197,7 +211,7 @@ export const STAGES = [
       { id: '7.4', mode: 'human', severity: 'warn', check: 'otherPersonDeployed', desc: '换个人照文档也能重新装起来', hint: '及格线第二条本身。找另一个人，只给他你的文档，让他从头装一遍，成了双方签字留痕' },
       { id: '7.5', mode: 'auto', severity: 'warn', check: 'backupConfigured', desc: '备份策略已配置且运行', hint: '配了但没跑起来' },
       { id: '7.6', mode: 'human', severity: 'warn', check: 'restoreDrilled', desc: '恢复演练完成有记录', hint: '及格线第三条本身。真删一次真恢复一次，记下日期耗时结果，还要抽几条比对字段值' },
-      { id: '7.7', mode: 'auto', severity: 'warn', check: 'monitoringVerified', desc: '监控告警配置且通道验证', hint: '发一条测试告警，确认真能收到' },
+      { id: '7.7', mode: 'human', severity: 'warn', check: 'monitoringVerified', desc: '监控告警配置且通道验证', hint: '发一条测试告警，确认真能收到' },
       // 手册在哪、里头有没有命令行，工具都看不见（它不在 artifacts 里，路径也只有人知道）。同 6.10。
       { id: '7.8', mode: 'human', severity: 'warn', check: 'manualPlainLanguage', desc: '使用手册无技术术语无代码', hint: '手册里出现了命令行或代码。用手册的人不会敲命令' },
       { id: '7.9', mode: 'human', severity: 'warn', check: 'accountsAndPasswordDelivery', desc: '账号建好了，密码是安全地发到每人手上的', hint: '别在微信群里直接发密码——群里的人和截图都留着。至少做到第一次登录必须改密码' },

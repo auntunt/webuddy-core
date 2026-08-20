@@ -358,7 +358,7 @@ export function resolvePack(nameOrDir, projectDir = null) {
 /**
  * 把一套检查清单挂到项目上。
  *
- * state.pack 存的是字符串（§2.3 的 schema 就一个 "pack": "software-engineering"），
+ * state.pack 存的是包名字符串（§2.3 的 schema 就一个 "pack": "<包名>"），
  * 不是 {name, version, dir} 这种对象：resolvePack 会把这个字段原样再喂给自己解一次，
  * 塞对象进去的话下次 check 会死在 nameOrDir.includes 上——而且是挂载之后才死，
  * 挂载当场看起来是成功的。

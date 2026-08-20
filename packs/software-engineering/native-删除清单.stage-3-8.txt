@@ -1,6 +1,14 @@
+# P3c/P3d 登记、P3z 合并点核对过的删除清单。
+# 下面「已删」的门禁，native-rules.js 里已经没有它们的条目。
+
 lib/rules.js: 3.1 3.2 3.3 3.4 3.6 3.8 3.10
-lib/rules-late.js: 4.3 4.5 4.7 4.8 4.9 4.10
+lib/rules-late.js: 4.3 4.5 4.7 4.8 4.10
 lib/rules-late.js: 5.3 5.4 5.5 5.6 5.10
 lib/rules-late.js: 6.3 6.4
-lib/rules-late.js: 7.1 7.2 7.3 7.4 7.5 7.6 7.8 7.9 7.12 7.13 7.19 7.20 7.21
-lib/rules-late.js: 8.1 8.2 8.3 8.4 8.5 8.6 8.7 8.8 8.9 8.10
+lib/rules-late.js: 7.1 7.2 7.3 7.4 7.5 7.6 7.8 7.9 7.13 7.19 7.20
+lib/rules-late.js: 8.1 8.2 8.3 8.8 8.9 8.10
+
+# 登记过要删、在 P3z 合并点退回的（native 保留，理由见 README「Native 条目」）：
+# 4.9 7.12 7.21 8.4 8.5 8.6 8.7
+# 这 7 条都是 auto 门禁且没有 DSL 块，删掉会让 pack lint 报"auto 门禁缺少探测实现"；
+# 它们的正确答案是 na/fix/ask，而探测表达式只有 pass|fail 两个出口，翻不过去。

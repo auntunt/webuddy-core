@@ -2,17 +2,22 @@
  * 软件工程包的 native 判定（§10.1 步骤 3：ref 的 92 条全量接过来）。
  *
  * 这里是个转接层，不是重写层。判据本体在 lib/rules.js + lib/rules-late.js，
- * 与 ref/webuddy-console/src/ 下同名文件逐字节相同——故意不动一个字：
+ * 每一条的函数体与 ref/webuddy-console/src/ 下同名文件逐字相同——故意不动一个字：
  *   逐条重敲 1000 行判据，抄错一个字段名（f.art.model.process.stepCount
  *   写成 stepsCount）就是一条静默判错的门禁，而单测很难发现，
  *   因为它照样返回一个合法的五态结果。原样接过来，判定语义天然与 ref 一致，
  *   §5.5 条件 3 的逐字段对拍才有意义。
  *
+ * 两个 lib 文件现在不再与 ref 逐字节相同：P3a–P3d 按 §10.2「同一提交内完成」
+ * 把能用 DSL 表达的条目整条删掉了（ref 侧 31+61=92 条，这里剩 1+19=20 条；
+ * 删除清单见 native-删除清单.stage-*.txt）。留下的每一条仍是原文，
+ * 删掉的那些不改写、不注释掉——注释掉的判据没人敢删，会一直烂在文件里。
+ *
  * 签名适配：内核给判定函数的是 ctx（§4.3），ref 的判据吃的是 f（事实集）。
  * 转换在 lib/facts.js，一次判定只装配一次事实。
  *
- * P3a–P3d 会把其中能用 DSL 表达的搬进 probes.md，native 收口到 ≤20 条。
- * 那时删的是下面 RULE_SOURCE 里的条目，不是这个转接层。
+ * P3a–P3d 已把其中能用 DSL 表达的搬进 probes.md，native 收口在 20 条（硬上限 ≤20，
+ * 正好用满）。删的是下面 RULE_SOURCE 背后两个 lib 文件里的条目，不是这个转接层。
  */
 
 import { RULES as EARLY } from './lib/rules.js';
@@ -21,8 +26,8 @@ import { buildFacts } from './lib/facts.js';
 
 
 /**
- * 92 条判据的原始表（环节 1-4 在 rules.js，5-8 在 rules-late.js）。
- * 拆成两个文件是 ref 的历史分法，本包不合并：合并等于改动 1000 行，
+ * 留下来的 native 判据表（环节 1-4 在 rules.js，5-8 在 rules-late.js）。
+ * 拆成两个文件是 ref 的历史分法，本包不合并：合并等于改动上千行，
  * 再对拍就说不清差异是移植带来的还是合并带来的。
  */
 const RULE_SOURCE = { ...EARLY, ...LATE };

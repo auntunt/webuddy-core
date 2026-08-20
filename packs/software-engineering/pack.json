@@ -11,7 +11,14 @@
   },
   "hints": {
     "testFile": "(^|[/._-])(test|tests|spec|__tests__|e2e)([/._-]|$)",
-    "schemaFile": "(schema\\.prisma|migrations?/|\\.sql$|models?\\.(py|ts|js)$)"
+    "schemaFile": "(schema\\.prisma|migrations?/|\\.sql$|models?\\.(py|ts|js)$)",
+    "caseMark": "(^|[^\\w.])(test|it|describe)\\s*(\\.\\s*\\w+\\s*)?\\(",
+    "assertMark": "(^|[^\\w.])(assert|expect|should)\\s*(\\.\\s*\\w+\\s*)?\\(",
+    "depsFile": "package.json",
+    "depsPaths": ["dependencies", "devDependencies"],
+    "testCmd": "(^|[\\s;&|])(npm|pnpm|yarn|bun)\\s+(run\\s+)?(test|test:unit|vitest|jest)\\b|(^|[\\s;&|])(vitest|jest|pytest|go\\s+test|cargo\\s+test|mvn\\s+test|phpunit)\\b",
+    "startCmd": "(^|[\\s;&|])(npm|pnpm|yarn|bun)\\s+(run\\s+)?(dev|start|serve)\\b",
+    "rootMarks": [".git", "package.json", "pyproject.toml", "go.mod", "Cargo.toml"]
   },
   "hooks": {
     "dependentGates": ["5.2", "5.3", "5.4", "5.5", "5.7", "5.8"]

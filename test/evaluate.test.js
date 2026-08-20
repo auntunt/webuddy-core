@@ -101,6 +101,28 @@ describe('evaluate', () => {
     assert.ok(r.counts.ask >= 1);
   });
 
+  it('阻断提问组：走到了的环节才拦路，还没走到的不拦', () => {
+    const dir = mkProject();
+    const r = evaluate(dir, pack);
+
+    // test-pack 只有 1.2 是阻断组，落在环节一；空项目 currentStage=1，所以它该拦
+    assert.deepStrictEqual(
+      r.promptsPending.map((p) => p.id),
+      ['1.2'],
+      '环节一的阻断提问组该拦路'
+    );
+
+    // 环节三还没走到（notYetStages 含 3）。把 1.2 答掉、让 1.1 过掉，
+    // 光标推进以前，环节三的门禁不许把项目判成"等你确认"
+    assert.ok(r.notYetStages.includes(3), '前置条件：环节三应当还没走到');
+    for (const p of r.promptsPending) {
+      assert.ok(
+        !r.notYetStages.includes(p.stage),
+        `第 ${p.stage} 步还没走到，它的问题不该出现在待答列表里（${p.id}）`
+      );
+    }
+  });
+
   it('产物齐了以后 auto 门禁转过', () => {
     const dir = mkProject();
     makeAllGreen(dir);

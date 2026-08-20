@@ -24,20 +24,33 @@ export function readStdin({ fd = 0, max = 1024 * 512 } = {}) {
 }
 
 /**
+ * 只认自己的标志物 .webuddy/ —— 一个登记过的项目一定有它（webuddy init 建的）。
+ * 这一条跟行业无关，所以可以写在内核里。
+ */
+const OWN_MARK = '.webuddy';
+
+/**
  * 定位这次事件属于哪个项目。
  *
- * 顺序是：已登记项目里包含 cwd 的那个 > cwd 自己像个项目根 > 放弃。
+ * 顺序是：cwd 自己有 .webuddy/（或调用方额外给的标志物）> 放弃。
  * 最后一档很重要：认不出来就什么都不写，
  * 否则在随便一个临时目录动手就会撒下一个 .webuddy/，用户迟早在某个目录里发现它然后不信任这个工具。
+ *
+ * 为什么只认 .webuddy/：这里原来还认 package.json / pyproject.toml / go.mod / Cargo.toml，
+ * 那是四个软件生态的工程文件名，内核不该认识它们（换成施工安全包时一个都不会出现）。
+ * 而 hook 跑的时候还没加载任何包，读不到 pack.hints——鸡生蛋的问题。
+ * 解法是把判断收窄到"我们自己留下的记号"：没 init 过的目录本来就不该被写入。
+ * 别的标志物由调用方按需传（marks），比如 CLI 已知当前包时可以把 pack.hints.rootMarks 传进来。
+ *
+ * @param {string} cwd
+ * @param {object} opts - {marks: string[]} 额外的标志物文件名，来自包
  */
-export function resolveProjectDir(cwd) {
+export function resolveProjectDir(cwd, { marks = [] } = {}) {
   if (!cwd) return null;
   let abs;
   try { abs = fs.realpathSync(path.resolve(cwd)); } catch { return null; }
 
-  // 简化版本：没有 registry 支持，只检查是否是项目根
-  const looksRoot = ['.git', 'package.json', '.webuddy', 'pyproject.toml', 'go.mod', 'Cargo.toml']
-    .some((n) => fs.existsSync(path.join(abs, n)));
+  const looksRoot = [OWN_MARK, ...marks].some((n) => n && fs.existsSync(path.join(abs, n)));
   return looksRoot ? abs : null;
 }
 
@@ -93,12 +106,12 @@ export function normalize(payload, { agent = '' } = {}) {
 /**
  * hook 主流程。返回 {written, dir, kind} 供测试断言，真实调用一律忽略返回值。
  */
-export function handleHook(rawText, { agent = '' } = {}) {
+export function handleHook(rawText, { agent = '', marks = [] } = {}) {
   let payload = null;
   try { payload = JSON.parse(rawText); } catch { return { written: false, why: 'stdin 不是 JSON' }; }
 
   const ev = normalize(payload, { agent });
-  const dir = resolveProjectDir(ev.cwd);
+  const dir = resolveProjectDir(ev.cwd, { marks });
   if (!dir) return { written: false, why: '认不出是哪个项目' };
 
   const ok = appendEvent(dir, ev);

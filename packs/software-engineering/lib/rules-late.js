@@ -178,41 +178,35 @@ export const RULES_LATE = {
     return { r: F, detail: problems.join('；') };
   },
 
+  // 4.9/4.10 必须留 native：两条都要出 na / fix，而探测表达式只有 pass 和 fail
+  // 两个出口。「还没有组件清单所以不用对照」（na）跟「清单里有不该有的东西」（fail）
+  // 是两件事，压成一个 fail 就是把"还没走到"说成"走错了"。
+  '4.9': (f) => {
+    if (!f.eng.pkg) return { r: NA, detail: '还没有组件清单，无从对照' };
+    const OFF_STACK = ['react-redux', 'redux', 'mongoose', 'mongodb', '@apollo/server', 'graphql', 'kubernetes-client', 'styled-components', 'emotion'];
+    const found = Object.keys(f.eng.deps).filter((d) => OFF_STACK.some((o) => d === o || d.startsWith(`${o}/`)));
+    return found.length === 0
+      ? { r: P }
+      : { r: X, detail: `AI 用了约定方案之外的组件：${found.join('、')}。不一定错，但得你点头一次——问它一句为什么非要换，理由说不通就让它换回来` };
+  },
+  // 4.10 交给 DSL：三个约定位置（package.json / src / tests）在不在，file-exists 就够。
+  // ref 那条判 fix（摆得不一样是提示不是拦路），而这条门禁在 mvp 下本来就静默，
+  // 提示级的差别不影响任何结论——换成两态判定是这一条上最省的选择。
+
+
   // ───────── 环节五 分步实现（逐切片，这里判整体状况） ─────────
-  '5.1': (f) => {
-    const slices = f.local.notes?.slices || [];
-    if (slices.length === 0) return { r: ASK, detail: '还没开始一小步一小步地做，或者做了但没记下来，所以这条现在判不了。往后每开始一小步，先说清这一步做哪条验收标准' };
-    const noAC = slices.filter((s) => !s.ac).length;
-    return noAC === 0 ? { r: P, detail: `${slices.length} 小步都说清了做哪条验收标准` } : { r: F, detail: `${noAC} 小步没说清做的是哪条验收标准。出问题的时候不知道该照哪条对` };
-  },
-  '5.2': (f) => {
-    const slices = f.local.notes?.slices || [];
-    if (slices.length === 0) return { r: ASK, detail: '还没有一轮记录，所以这条判不了。做法是：让 AI 动手前先说它打算怎么改，你看过一遍再放它动手，那段话就是这一轮的计划（命令行：webuddy round start --plan "..."）' };
-    const noPlan = slices.filter((s) => !s.plan).length;
-    return noPlan === 0
-      ? { r: P, detail: `${slices.length} 轮都是先说计划再动手` }
-      : { r: X, detail: `${noPlan} 轮是直接开始改的。让 AI 先说它打算改哪里，你看一眼再放它动手——这一眼是你唯一能拦住它的地方` };
-  },
-  '5.7': (f) => {
-    // 「只做一件事」的判据：一轮只声明一条验收标准。
-    // 不去数改了几个功能——那要读代码。声明了两条以上，就是自己承认了做了多件事。
-    const slices = f.local.notes?.slices || [];
-    if (slices.length === 0) return { r: ASK, detail: '还没有一轮记录，这条现在判不了' };
-    const multi = slices.filter((s) => (s.ac || '').split(/[,，、\s]+/).filter(Boolean).length > 1);
-    return multi.length === 0
-      ? { r: P, detail: '每轮只做一条验收标准' }
-      : { r: X, detail: `${multi.length} 轮一次做了好几条标准（${multi[0].ac}）。出问题的时候你分不清是哪一条弄坏的` };
-  },
-  '5.8': (f) => {
-    const v = f.local.notes?.violations?.driveByRefactor || [];
-    // 这条判待改不判不通过：顺手重构是风险，但不像改测试那样是作弊
-    if (v.length) return { r: X, detail: `AI 顺手改了 ${v.length} 个跟这轮无关的文件：${v.slice(0, 5).join('、')}。它说的"顺便优化一下"是风险不是好事——那些地方没有测试盯着` };
-    return fromRounds(f, 'driveByRefactor', null, null);
-  },
+  // 5.10 原来是 `(f) => human(f, '5.10')`，跟内核默认处理同义，删掉裁决不变。
+  // 5.9/5.12 必须留 native：「还没试过」是 fix（去做一件事），「试了没成」是 fail
+  // （东西坏了）。这两句对用户的意思完全不同，而 DSL 只能给出其中一种。
   '5.9': (f) => {
     const r = runResult(f, 'start');
-    if (!r) return { r: X, detail: '还没试过软件现在能不能跑起来' };
+    if (!r) return { r: X, detail: '还没试过软件现在能不能跑起来。跑一次 webuddy check 5.9，工具会替你起一次看看' };
     return r.ok ? { r: P } : { r: F, detail: `软件跑不起来了：${r.error || '见日志'}` };
+  },
+  '5.12': (f) => {
+    const r = runResult(f, 'test');
+    if (!r) return { r: X, detail: '这一轮改完后还没跑过测试。跑一次 webuddy check 5.12' };
+    return r.ok ? { r: P } : { r: F, detail: `有测试没通过：${r.error || '见日志'}` };
   },
   '5.11': (f) => {
     if (f.eng.commitCount === 0) return { r: F, detail: '一次档都还没存过' };
@@ -220,11 +214,6 @@ export const RULES_LATE = {
     if (ratio >= 0.7) return { r: P, detail: `${f.eng.commitsWithAC}/${f.eng.commitCount} 次存档写了验收标准编号` };
     if (f.eng.commitsWithAC === 0) return { r: F, detail: '每次存档都没写对应哪条验收标准。以后想查"这处为什么改的"就查不出来了' };
     return { r: X, detail: `只有 ${f.eng.commitsWithAC}/${f.eng.commitCount} 次存档写了编号` };
-  },
-  '5.12': (f) => {
-    const r = runResult(f, 'test');
-    if (!r) return { r: X, detail: '这一轮改完后还没跑过测试' };
-    return r.ok ? { r: P } : { r: F, detail: `有测试没通过：${r.error || '见日志'}` };
   },
 
   // ───────── 环节六 验证与质量门禁 ─────────
@@ -282,18 +271,6 @@ export const RULES_LATE = {
     }
     return { r: P, detail: `${acCount} 条标准都配了测试，点名的 ${new Set(declared.map((d) => d.file)).size} 个测试文件在项目里都找得到` };
   },
-  '6.2': (f) => {
-    const r = runResult(f, 'test');
-    if (!r) return { r: F, detail: '一次测试都还没跑过。测试是你唯一能看出软件好没好的通道，不跑就等于闭着眼上线' };
-    if (!r.ok) return { r: F, detail: `有测试没通过：${r.error || '见日志'}。带着没过的测试上线，等于知道有毛病还往前走` };
-    // 一次跑绿的结果会一直留在记录里。测试后来被删光了，这条还照样念那句"全绿"——
-    // 报的是一个已经不成立的旧结论。所以过一道最起码的核对：现在磁盘上还有测试文件吗。
-    // 只数文件个数，不看内容。
-    if ((f.eng.testFileCount || 0) === 0) {
-      return { r: ASK, detail: `记录里 ${r.date} 那次是全绿的，但现在项目里一个测试文件都没有了。这句"全绿"说的是当时，不是现在。补回测试再跑一次（命令行：webuddy check test）` };
-    }
-    return { r: P, detail: `${r.date} 全绿${r.passed ? `（${r.passed} 条）` : ''}，现在项目里有 ${f.eng.testFileCount} 个测试文件` };
-  },
   /**
    * 6.5 测过出错和极端的情况。
    *
@@ -325,71 +302,11 @@ export const RULES_LATE = {
       detail: `${okCount > 0 ? `四项里过了 ${okCount} 项，还缺 ${bad.length} 项。` : '四项都还没覆盖。'}${lines.join('；')}`,
     };
   },
-  /**
-   * 6.9 本轮无测试文件被实现动作修改。
-   *
-   * 5.6 和 6.9 的差别在于时间范围：
-   *   5.6 是全程累计——只要发生过就一直是红的，不能用"现在没事"来洗。
-   *   6.9 是本轮——「本轮」的意思是"最近一次 round end 之后到现在"。
-   *       之所以不是"全程"：5.6 已经拦住了，6.9 再重复一遍就是同一个红灯亮两次。
-   *       重复的红灯会让人开始忽略所有红灯——这是比漏掉一条更贵的损失。
-   *
-   * 实现：violations.testsTampered 记的是历史累计，
-   * violationsAt.testsTampered 记的是这批违规最近一次出现的时间。
-   * 最近一条 slice 的 endedAt 是当前轮次收工时间。
-   * 违规时间早于最后一条 slice，则本轮是干净的（历史上那次已由 5.6 处理）。
-   * 两个时间戳缺任何一个都判不了本轮，走 ask——判不了要说判不了。
-   */
-  '6.9': (f) => {
-    const slices = f.local.notes?.slices || [];
-    if (slices.length === 0) {
-      return { r: ASK, detail: '这一轮改动工具没在旁边看着，所以判不了。下次让 AI 动手前先在这里开一轮（命令行：webuddy round start）' };
-    }
-    const v = f.local.notes?.violations?.testsTampered || [];
-    // 没有违规记录，就没有"本轮"要分辨的东西，时间戳缺不缺都不影响结论。
-    if (!v.length) return { r: P, detail: '本轮没有测试文件被改小或删掉' };
-    const lastSliceAt = slices[slices.length - 1].endedAt;
-    const violatedAt = f.local.notes?.violationsAt?.testsTampered;
-    /**
-     * 少一个时间戳就判不了"是不是本轮"，这时候要说判不了，不能说没事。
-     *
-     * 原来这里直接 `violatedAt > lastSliceAt`。JS 里任何字符串跟 undefined 比大小
-     * 恒为 false，于是老轮次记录（slice 里没写 endedAt）一旦有测试被改动，
-     * 这条就直落绿灯——同一时刻 5.6 判红、告警报"测试被改动"，6.9 却说本轮干净。
-     * 一块仪表盘上两个针指反方向，人会挑他愿意信的那个看。
-     */
-    if (!lastSliceAt || !violatedAt) {
-      return { r: ASK, detail: `有测试文件被改小或删掉了（${v.join('、')}），但这次改动没留下时间，分不出是这一轮干的还是以前的。自己看一眼这几个文件现在对不对，然后确认` };
-    }
-    // 有违规记录，且违规时间在最后一条 slice 完成之后 → 就是本轮干的
-    if (violatedAt > lastSliceAt) {
-      return { r: F, detail: `这一轮又有测试被改动了：${v.join('、')}。改测试让它变绿是最省力的作弊，也是最贵的——你的仪表盘就是它` };
-    }
-    return { r: P, detail: '本轮没有测试文件被改小或删掉' };
-  },
-  '6.10': (f) => {
-    // 这八条的名字要用后果说，不用手段说。「SQL 参数化」他不知道是什么，
-    // 「防数据库被套话」他知道那是坏事，也知道该去问 AI 有没有做。
-    const NAMES = {
-      auth: '改数据前必须先登录', filter: '每人只看得到自己该看的数据', sqlParam: '防数据库被套话',
-      escape: '防页面被塞进恶意脚本', hashPwd: '密码存成不可还原的乱码', upload: '上传限类型和大小',
-      session: '久不操作自动退出', errorMsg: '报错不把内部细节抖出去',
-    };
-    const items = f.local.notes?.security;
-    // 没有记录时走人工确认，不是直接判红。
-    // 这八条得看代码才知道做没做，而规则二不许判据依赖读代码——所以工具本来就判不了它。
-    // 原来这里没记录就判 F，而全仓库没有任何命令会写 notes.security：
-    // 门禁永远过不去，人做完八条也还是红的。那是一条永久的假警报，
-    // 一条假警报够让人开始忽略后面所有的警报。
-    if (!items) {
-      const h = human(f, '6.10');
-      if (h.r !== ASK) return h;
-      return { r: ASK, detail: `把这八条逐条发给 AI，问它做没做、做在哪，看过回答再确认：${Object.values(NAMES).join('、')}` };
-    }
-    const missing = Object.keys(NAMES).filter((k) => items[k] !== true);
-    if (missing.length === 0) return { r: P, detail: '八条底线全过' };
-    return { r: F, detail: `安全底线还差 ${missing.length} 条：${missing.map((k) => NAMES[k]).join('、')}。把这几条原话发给 AI，让它逐条改并说明改在哪` };
-  },
+  // 6.10 不留 native：这是 human 门禁，native 只有 fail/fix 会被采纳。
+  // 它的 fail 分支要 f.local.notes.security，而全仓库没有任何命令会写这个字段——
+  // 分支永久不可达。八条安全底线的清单已经在 SKILL.md 的门禁说明里，
+  // 靠人工确认走，不需要占一个 native 名额。
+
   '6.11': (f) => {
     const problems = [];
     if (f.eng.secretHits.length > 0) problems.push(`${f.eng.secretHits.length} 处密码直接写在代码里`);
@@ -400,25 +317,6 @@ export const RULES_LATE = {
   },
 
   // ───────── 环节七 上线与上架 ─────────
-  /**
-   * 7.7 监控告警配置且通道验证。
-   *
-   * 以前：没有 alert runResult 就直接判 F，而 webuddy 没有任何命令写这个 runResult——
-   * 于是这条永远是红的，配了告警也还是红的。永久假警报，比没警报更贵。
-   *
-   * 告警通道是不是真能发出去，工具没法替人试：它不知道那个手机号收没收到短信。
-   * 所以改成：有 runResult 且 ok → 自动通过（工具真跑过 webuddy check alert）；
-   * 没有 → 交给人确认，人确认了留名字和日期，可复核。
-   * 这和 7.8、7.17 的处理逻辑一致。
-   */
-  '7.7': (f) => {
-    const r = runResult(f, 'alert');
-    if (r?.ok) return { r: P, detail: `${r.date} 出事通知能收到，试过了` };
-    if (r && !r.ok) return { r: F, detail: `告警测试发送失败：${r.error || '见日志'}。出事没人知道，跟没有告警一样` };
-    const h = human(f, '7.7');
-    if (h.r !== ASK) return h;
-    return { r: ASK, detail: '配一个出事通知（短信、邮件或企微），配完发一条测试通知确认真能收到，然后在这里确认。出事没人知道跟没有监控一样' };
-  },
   '7.10': (f) => {
     const h = f.art.handover;
     if (!h.exists) return { r: F, detail: '还没有交接单。写清四件事：网址怎么访问、新版本怎么发上去、数据怎么备份和恢复、出事找谁（文件在 artifacts/07-handover.md）' };
@@ -428,56 +326,102 @@ export const RULES_LATE = {
     }
     return human(f, '7.10');
   },
-  '7.11': (f) => (f.art.handover.trainingRecorded ? { r: P } : human(f, '7.11')),
-  '7.14': (f) => {
-    const exposure = f.local.answers?.['pre-deploy-compliance']?.exposure;
-    if (!exposure) return { r: ASK, detail: '要先知道一件事才能判：这系统给谁访问？只有单位内部员工，还是外面的人也能打开？只在内网用的话，这条大概率不适用' };
-    // "只有内部员工，外部完全打不开" 这种答法里也有"外部"两个字，
-    // 所以先看有没有明确的否定说法，再看有没有对外的说法。
-    const deniesExternal = /外部.{0,6}(打不开|不能|无法|访问不了|进不来)|不对(公网|外网|外部)|仅(内网|内部)|只(有|在|限).{0,6}(内网|内部|员工)/.test(exposure);
-    const claimsExternal = /(公众|外部客户|对外开放|公网可访问|互联网)/.test(exposure) && !deniesExternal;
-    if (deniesExternal && !claimsExternal) return { r: NA, detail: '只在单位内部网络用、外面打不开，所以不用办网站备案' };
-    return human(f, '7.14');
-  },
-  '7.15': (f) => {
-    const a = f.local.answers?.['pre-deploy-compliance']?.dataResidency;
-    if (!a) return { r: ASK, detail: '要先知道一件事才能判：数据存在国内还是国外？也就是租的服务器在哪个国家。这条内网项目也要答' };
-    // 这一条内网项目也要过。只要答案里明确了位置，就算说清了。
-    if (/境外|海外|国外|AWS|aws|GCP|Azure|新加坡|香港|美国/.test(a)) {
-      return human(f, '7.15');
-    }
-    if (/境内|国内|自建|自己机房|本地|内网/.test(a)) return { r: P, detail: `数据存在国内：${a}` };
-    return human(f, '7.15');
-  },
-  '7.16': (f) => {
-    const a = f.local.answers?.['pre-deploy-people']?.oldProcessClose;
-    if (!a) return { r: F, detail: '旧办法的关闭日期还没定。纸单还在收、Excel 还在传，新系统一定没人用' };
-    // 要的是一个具体日期，"尽快""上线后"都不算
-    const hasDate = /\d{4}[-/年]\s*\d{1,2}|\d{1,2}\s*月\s*\d{1,2}/.test(a);
-    return hasDate ? { r: P, detail: `关闭时间：${a}` } : { r: X, detail: `"${a}" 不是一个具体日期。要写成 2026-09-01 这样` };
-  },
-  '7.17': (f) => {
-    const u = f.local.notes?.usage;
-    // "有几个人真的用过"只有人去数得出来，工具看不见生产库。
-    // 原来没记录就一直挂 ASK，而 ASK 会让环节七停在 waiting——
-    // 当前环节就永远卡在七，环节八根本轮不到。没有任何命令会写 notes.usage，
-    // 也就没有任何办法把它清掉。所以给一条人工确认的出口。
-    if (!u) {
-      const h = human(f, '7.17');
-      if (h.r !== ASK) return h;
-      return { r: ASK, detail: '上线一周后去数一下：除你之外还有几个人真的用过、录了多少条数据。数完再确认。只有你自己用过就不算上线成功' };
-    }
-    if (u.distinctUsers >= 2) return { r: P, detail: `${u.distinctUsers} 个人用过，共 ${u.records || '?'} 条记录` };
-    return { r: F, detail: '只有你自己登录过。按六步排查：他知道吗 / 会用吗 / 旧办法还能用吗 / 比原来麻烦吗 / 敢用吗 / 才是场景选错' };
+
+
+
+
+  // 7.11/7.14/7.15/7.17/7.18 都不留 native：全是 human 门禁，native 里的
+  // pass/ask/na 分支到不了调用点（内核只采纳 human 门禁 native 的 fail/fix）。
+  // 7.17 的 fail 分支要 notes.usage，没有任何命令会写它，同 6.10。
+
+  // 7.12 必须留 native：还没上线的时候「正式环境是干净的」这句话没有意义，
+  // 因为还没有正式环境。这种情况要出 na，DSL 出不了，只能出 fail——
+  // 那等于因为"还没上线"就说人家生产数据脏。
+  '7.12': (f) => {
+    if (!f.art.handover.url) return { r: NA, detail: '还没上线，没有正式环境可查' };
+    const h = human(f, '7.12');
+    if (h.r !== ASK) return h;
+    return { r: ASK, detail: '打开正式系统翻一遍数据，把测试时乱填的单子（张三、测试一下、aaa 这种）删干净，然后在这里确认。用户第一次打开看到假数据，会以为整个系统的数都不能信' };
   },
 
-  // ───────── 环节七「演示就绪」批（7.18-7.21）─────────
-  // 判据纪律同前：看的是"有没有这个文件/这个地址打开过没有"，不评价演示做得好不好。
-  '7.18': (f) => {
-    const h = human(f, '7.18');
+  // 7.7 必须留 native：「发过测试通知但没收到」是 fail，「还没配过」是 ask。
+  // DSL 只有两态，把"还没配"也说成 fail 就是在项目还没走到这一步时先判它不合格。
+  '7.7': (f) => {
+    const r = runResult(f, 'alert');
+    if (r?.ok) return { r: P, detail: `${r.date} 出事通知能收到，试过了` };
+    if (r && !r.ok) return { r: F, detail: `告警测试发送失败：${r.error || '见日志'}。出事没人知道，跟没有告警一样` };
+    const h = human(f, '7.7');
     if (h.r !== ASK) return h;
-    return { r: ASK, detail: '写一小段演示脚本（文件在 artifacts/07-demo-script.md，模板用 webuddy new 演示脚本 生成）：打开哪个页面、点哪几下、每步说什么，3 分钟内走完。写好后在这里确认' };
+    return { r: ASK, detail: '配一个出事通知（短信、邮件或企微），配完发一条测试通知确认真能收到，然后在这里确认。出事没人知道跟没有监控一样' };
   },
+
+  // ───────── 环节七「演示就绪」批（7.19-7.21）─────────
+  // 判据纪律同前：看的是"有没有这个文件/这个地址打开过没有"，不评价演示做得好不好。
+  // 7.21 必须留 native：「还没打开看过」是 fix，「打开了打不开」是 fail。
+  '7.21': (f) => {
+    const r = runResult(f, 'demoUrl');
+    if (r?.ok) return { r: P, detail: `${r.date} 演示地址打开看过（${r.note || '返回正常'}）` };
+    if (r && !r.ok) return { r: F, detail: `演示地址打不开：${r.error || '见日志'}` };
+    return { r: X, detail: '演示地址还没真打开看过。用给别人看时的那个地址打开一次，跑 webuddy check demoUrl --url <地址>，工具会替你留痕' };
+  },
+
 
   // ───────── 环节八 运行与迭代 ─────────
+
+  /**
+   * 8.5 改了数据表结构就回环节二先改数据字典。
+   *
+   * 这条必须是 native，不能走 DSL：ref 在「上线后还没改过东西」时判 na，
+   * 而 DSL 只有 pass|fail 两态，给不出 na。翻成
+   * all(file-exists(字典), file-exists(变更记录)) 之后判据被抽空成了
+   * 「两个文件都在就算过」——改了表结构没同步字典照样判绿，
+   * 正是这条门禁要防的事。
+   */
+  '8.5': (f) => {
+    const v = f.local.notes?.violations?.schemaChangedInOps || [];
+    if (v.length) return { r: F, detail: `数据表结构直接改了，没回环节二先改数据字典：${v.join('、')}。文档跟实际一旦对不上，以后没人敢动这个系统` };
+    const c = f.art.operate.changes;
+    if (!c.exists || c.count === 0) return { r: NA, detail: '上线后还没改过东西' };
+    if (c.noSchemaCol) return { r: F, detail: '变更记录里没有「是否动数据模型」这一列。改了表结构却不回去改数据字典，是系统烂掉最常见的一条路，所以这一列必须记。补上这列，每次发版填是或否' };
+    if (c.schemaChangedNoModelUpdate > 0) {
+      return { r: F, detail: `有 ${c.schemaChangedNoModelUpdate} 次改了数据表结构，但没标明回环节二先更新数据字典。要么补上"已同步数据字典"，要么现在回去把字典改对` };
+    }
+    return { r: P, detail: `${c.count} 次改动都记了动没动数据模型` };
+  },
+
+  /**
+   * 8.4 / 8.6 / 8.7 和 8.5 是同一个理由留 native：环节八的门禁全部要先分清
+   * 「还没进运行阶段」和「进了但做得不对」。前者是 na，后者是 fail/fix。
+   * 上线后一次都没改过东西的项目，如果这三条判 fail，一个刚上线的项目会被
+   * 说成三条不合格；判 pass 又是假绿。两种都错，只有 na 是对的。
+   */
+  '8.4': (f) => {
+    const iss = f.art.operate.issues;
+    if (!iss.exists || !iss.count) {
+      return { r: NA, detail: '本子还没记东西，还没真进运行阶段' };
+    }
+    if (iss.noKindCol) {
+      return { r: ASK, detail: '台账里没有能分出「这是故障」还是「这是新想法」的那一栏，所以这条判不了。在台账加一列「类型」，填缺陷 / 使用问题 / 需求' };
+    }
+    const n = iss.requestsInBugFlow;
+    return n === 0
+      ? { r: P }
+      : { r: F, detail: `${n} 条其实是「想加个新功能」，被当成故障顺手改掉了。这是系统烂掉的起点——新功能要进下一轮场景卡重新走一遍，别插队` };
+  },
+  '8.6': (f) => {
+    const c = f.art.operate.changes;
+    if (!c.exists || c.count === 0) return { r: NA, detail: '上线后还没改过东西' };
+    if (c.noTestCol) return { r: F, detail: '变更记录里没有「测试是否全绿」这一列。上线之后每改一次都得先跑测试，不记就没人知道有没有跑。补上这列' };
+    if (c.notGreen > 0) return { r: F, detail: `${c.notGreen} 次发版前测试没全绿就发上去了。测试是你唯一能看出改动有没有弄坏别的地方的通道` };
+    if (c.testBlank > 0) return { r: X, detail: `${c.testBlank} 次发版的「测试是否全绿」栏空着。空着等于没跑——跑一次填上，或者写清为什么这次不用跑` };
+    return { r: P, detail: `${c.count} 次发版前测试都全过` };
+  },
+  '8.7': (f) => {
+    const c = f.art.operate.changes;
+    if (!c.exists || c.count === 0) return { r: NA, detail: '上线后还没改过东西' };
+    if (c.noBackupCol) return { r: F, detail: '变更记录里没有「是否已备份」这一列。发版前先备份是改坏了还能退回去的唯一保障，必须每次记' };
+    if (c.notBackedUp > 0) return { r: F, detail: `${c.notBackedUp} 次发版前没先备份。改坏了数据就找不回来了` };
+    if (c.backupBlank > 0) return { r: X, detail: `${c.backupBlank} 次发版的「是否已备份」栏空着。空着就当没备份，补填一下` };
+    return { r: P, detail: `${c.count} 次发版前都先备份了` };
+  },
 };

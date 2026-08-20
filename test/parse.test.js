@@ -11,9 +11,7 @@ import {
   colIndex,
   columnHasBlank,
   countListItems,
-  hasMeasurableNumber,
-  findBannedWords,
-  extractACCodes
+  findWords
 } from '../src/kernel/parse.js';
 
 test('parseFrontmatter 解析基本 frontmatter', () => {
@@ -152,38 +150,23 @@ test('countListItems 忽略占位符', () => {
   assert.strictEqual(count, 1);
 });
 
-test('hasMeasurableNumber 检测可测量数字', () => {
-  assert.strictEqual(hasMeasurableNumber('响应时间小于 500 毫秒'), false); // 没有常见单位
-  assert.strictEqual(hasMeasurableNumber('3 天内完成'), true);
-  assert.strictEqual(hasMeasurableNumber('用户增长 20%'), true);
-  assert.strictEqual(hasMeasurableNumber('从 100 个降到 50 个'), true);
-  assert.strictEqual(hasMeasurableNumber('没有数字'), false);
-});
+// hasMeasurableNumber / findBannedWords / extractACCodes 的测试搬到包侧了。
+// 三个函数本身还在跑，只是不在内核里：可测量单位表、22 个禁用形容词、AC- 编号格式
+// 都是软件工程包才认识的东西，内核留着一份等于把行业知识焊死在内核。
+// 内核这边只留 findWords（词表由调用方给）这个机制。
 
-test('findBannedWords 查找禁用词', () => {
+test('findWords 按给的词表找命中', () => {
   const text = '系统应该友好、快速、稳定地处理用户请求';
-  const banned = findBannedWords(text);
-  assert.ok(banned.includes('友好'));
-  assert.ok(banned.includes('快速'));
-  assert.ok(banned.includes('稳定'));
+  const hits = findWords(text, ['友好', '快速', '稳定', '灵活']);
+  assert.deepStrictEqual(hits, ['友好', '快速', '稳定']);
 });
 
-test('findBannedWords 无禁用词', () => {
-  const text = '系统在 3 秒内返回结果';
-  const banned = findBannedWords(text);
-  assert.strictEqual(banned.length, 0);
+test('findWords 一个都没命中就是空数组', () => {
+  assert.deepStrictEqual(findWords('系统在 3 秒内返回结果', ['友好', '快速']), []);
 });
 
-test('extractACCodes 提取 AC 编号', () => {
-  const text = '参见 AC-001 和 AC-023，另外 AC42 也相关';
-  const codes = extractACCodes(text);
-  assert.ok(codes.includes('AC-001'));
-  assert.ok(codes.includes('AC-023'));
-  assert.ok(codes.includes('AC-042'));
-});
-
-test('extractACCodes 自动补零', () => {
-  const text = 'AC-5 和 AC5 都应该识别';
-  const codes = extractACCodes(text);
-  assert.ok(codes.includes('AC-005'));
+test('findWords 没给词表不报错', () => {
+  // 包漏了 lexicons 的时候不该崩，返回空 = 没命中 = 由调用方决定怎么判
+  assert.deepStrictEqual(findWords('随便什么文字', undefined), []);
+  assert.deepStrictEqual(findWords('', ['友好']), []);
 });
