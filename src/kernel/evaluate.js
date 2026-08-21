@@ -133,7 +133,12 @@ function humanPrecheck(gate, env) {
  */
 function judgeGate(gate, sev, env) {
   const { ctx, probes, nativeRules, naGates, records, instanceVersion } = env;
-  const base = { id: gate.id, stage: gate.stage, severity: sev, mode: gate.mode };
+  // needsEvidence 跟着门禁一路传到界面：包说这条要交文件，卡片上就得有上传框。
+  // 只在为真时带上，免得给每条门禁都加一个 false 字段。
+  const base = {
+    id: gate.id, stage: gate.stage, severity: sev, mode: gate.mode,
+    ...(gate.needsEvidence ? { needsEvidence: true } : {}),
+  };
 
   /**
    * 需求裁剪：骨架说这条对本项目不适用，直接 na，不跑判据。

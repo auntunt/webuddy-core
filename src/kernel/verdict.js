@@ -117,11 +117,18 @@ export function buildVerdict(evalResult, pack, { evaluatedAt = null } = {}) {
  * 人会去找那两条找不到的。
  */
 function buildHumanPending(evalResult) {
+  // 哪些条目要交文件。这一位是包声明的（SKILL.md 的「需要凭据:」），
+  // 从门禁结论里取，两条组装路径（阻断提问组 / 光秃秃的 ask 门禁）共用同一份。
+  const wantsFile = new Set(
+    (evalResult.gates || []).filter((v) => v.needsEvidence).map((v) => v.id)
+  );
+  const withFile = (o) => (wantsFile.has(o.id) ? { ...o, needsEvidence: true } : o);
+
   const byId = new Map();
   for (const p of evalResult.promptsPending || []) {
-    byId.set(p.id, {
+    byId.set(p.id, withFile({
       id: p.id, stage: p.stage, lead: p.lead || '', asks: p.asks || [],
-    });
+    }));
   }
 
   const notYet = new Set(evalResult.notYetStages || []);
@@ -132,12 +139,12 @@ function buildHumanPending(evalResult) {
     // 而其中绝大多数要等好几周才轮得到——这跟没提示一样没用。
     if (notYet.has(v.stage)) continue;
     if (byId.has(v.id)) continue;
-    byId.set(v.id, {
+    byId.set(v.id, withFile({
       id: v.id,
       stage: v.stage,
       lead: v.say || '',
       asks: [],
-    });
+    }));
   }
 
   return [...byId.values()].sort((a, b) => String(a.id).localeCompare(String(b.id), 'en', { numeric: true }));

@@ -133,6 +133,8 @@ try {
     port: { type: 'string' },
     token: { type: 'string' },
     'allow-origin': { type: 'string' },
+    'no-browser': { type: 'boolean' },
+    alias: { type: 'string' },
     strict: { type: 'boolean' },
     yes: { type: 'boolean' },
     'fail-on': { type: 'string' },

@@ -1,0 +1,151 @@
+/* 看板样式。零构建、零依赖，一个文件。
+   字号偏大、行距偏松：用它的人不一定年轻，也不一定在大屏幕前。 */
+
+:root {
+  --ink: #1c1c1e;
+  --dim: #6b6b70;
+  --line: #e2e2e6;
+  --bg: #f7f7f8;
+  --card: #fff;
+  --red: #c0392b;
+  --amber: #b7791f;
+  --green: #2d7a3e;
+  --link: #14568a;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 0 0 4rem;
+  font: 17px/1.65 -apple-system, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  color: var(--ink);
+  background: var(--bg);
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  padding: .9rem 1.2rem;
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+}
+
+.home { color: var(--link); text-decoration: none; font-weight: 600; }
+.crumb { color: var(--dim); }
+
+main { max-width: 46rem; margin: 0 auto; padding: 1.4rem 1.2rem; }
+
+h1 { font-size: 1.5rem; margin: .2rem 0 1.2rem; }
+h2 { font-size: 1.1rem; margin: 0 0 .8rem; }
+
+/* 三问区：首屏最重的三行 */
+.ask3 {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-left: 5px solid var(--link);
+  border-radius: .5rem;
+  padding: 1.1rem 1.2rem;
+  margin-bottom: 1.4rem;
+}
+
+.ask3 p { margin: .35rem 0; }
+.ask3 .a1 { font-size: 1.15rem; font-weight: 600; }
+.ask3 .a2 { color: var(--red); }
+.ask3 .a3 { color: var(--dim); }
+
+.zone { margin-bottom: 1.6rem; }
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: .5rem;
+  padding: .9rem 1.1rem;
+  margin-bottom: .7rem;
+}
+
+.card.block { border-left: 5px solid var(--red); }
+.card.human { border-left: 5px solid var(--amber); }
+.card.prop { border-left: 5px solid var(--link); }
+
+.card .say { font-weight: 600; margin: 0 0 .35rem; }
+.card .how { margin: 0; color: var(--dim); }
+.card .file { margin: .4rem 0 0; }
+.card .file a { color: var(--link); }
+
+.empty {
+  background: var(--card);
+  border: 1px dashed var(--line);
+  border-radius: .5rem;
+  padding: 1rem 1.1rem;
+  color: var(--dim);
+}
+
+.pcard {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: .5rem;
+  padding: 1rem 1.1rem;
+  margin-bottom: .7rem;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.pcard:hover { border-color: var(--link); }
+.pcard .pn { font-size: 1.15rem; font-weight: 600; }
+.pcard .pstate { color: var(--dim); margin: .25rem 0; }
+.pcard .pfirst { color: var(--red); }
+.pcard .pgo { color: var(--link); margin: .4rem 0 0; }
+
+label { display: block; margin: .6rem 0 .2rem; }
+input[type=text], textarea {
+  width: 100%;
+  padding: .55rem .7rem;
+  font: inherit;
+  border: 1px solid var(--line);
+  border-radius: .4rem;
+  background: #fff;
+}
+textarea { min-height: 3.2rem; }
+
+button {
+  font: inherit;
+  padding: .55rem 1.1rem;
+  margin: .7rem .5rem 0 0;
+  border: 1px solid var(--link);
+  border-radius: .4rem;
+  background: var(--link);
+  color: #fff;
+  cursor: pointer;
+}
+
+button.ghost { background: #fff; color: var(--link); }
+button:disabled { opacity: .55; cursor: default; }
+
+.drop {
+  margin: .7rem 0 0;
+  padding: 1.1rem;
+  border: 2px dashed var(--line);
+  border-radius: .5rem;
+  text-align: center;
+  color: var(--dim);
+  background: #fbfbfc;
+}
+
+.drop.over { border-color: var(--link); color: var(--link); }
+.drop input[type=file] { display: block; margin: .5rem auto 0; }
+
+.msg { margin: .5rem 0 0; color: var(--green); }
+.msg.err { color: var(--red); }
+.hint { color: var(--dim); margin: .3rem 0 .6rem; }
+.adv { margin-top: 2rem; color: var(--dim); }
+.adv summary { cursor: pointer; }
+.boot { max-width: 46rem; margin: 2rem auto; padding: 0 1.2rem; color: var(--dim); }
+.bad { color: var(--red); }

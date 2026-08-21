@@ -22,6 +22,12 @@ import { statePath, loadState, saveState } from './state.js';
 import { evaluate } from './evaluate.js';
 
 /**
+ * 内核自带的术语底表（§14.4）。用 import 读而不是 fs.readFileSync：
+ * 这文件跟代码一起发，路径怎么变都跟着走，不用拼 __dirname。
+ */
+import BASE_GLOSSARY from './glossary-base.json' with { type: 'json' };
+
+/**
  * 加载担架包。
  *
  * @param {string} packDir - 包目录路径
@@ -90,12 +96,18 @@ export async function loadPack(packDir) {
     }
   }
 
-  // 5. 加载 glossary.json
-  let glossary = {};
+  /**
+   * 5. 加载 glossary.json，叠在内核的 glossary-base.json 之上（§14.4）。
+   *
+   * base 打底的原因：「门禁」「倒挂」这些词是内核自己造的，每个包都得翻一遍
+   * 才不漏，漏一个就在界面上露出一个术语。包里的同名键覆盖 base——
+   * 行业里管它叫别的名字时，包说了算。
+   */
+  let glossary = { ...BASE_GLOSSARY };
   const glossaryPath = path.join(packDir, 'glossary.json');
   if (fs.existsSync(glossaryPath)) {
     try {
-      glossary = JSON.parse(fs.readFileSync(glossaryPath, 'utf8'));
+      Object.assign(glossary, JSON.parse(fs.readFileSync(glossaryPath, 'utf8')));
     } catch (e) {
       errors.push(`glossary.json 格式错误: ${e.message}`);
     }

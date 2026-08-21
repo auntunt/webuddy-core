@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>项目进度</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<header class="top">
+  <a class="home" href="/" id="home">我的项目</a>
+  <span class="crumb" id="crumb"></span>
+</header>
+
+<!-- 项目列表页 -->
+<main id="page-list" hidden>
+  <h1>我的项目</h1>
+  <div id="list-empty" class="empty" hidden></div>
+  <div id="cards"></div>
+  <details class="adv">
+    <summary>加一个项目</summary>
+    <p class="hint">把项目文件夹的完整路径贴进来。不知道路径的话，问一下帮你装的技术同事。</p>
+    <input id="add-dir" type="text" placeholder="/Users/你/项目文件夹" aria-label="项目文件夹路径">
+    <input id="add-alias" type="text" placeholder="给它起个名字（选填）" aria-label="项目名字">
+    <button id="add-go" type="button">加进来</button>
+    <p id="add-msg" class="msg"></p>
+  </details>
+</main>
+
+<!-- 项目页 -->
+<main id="page-project" hidden>
+  <h1 id="pname"></h1>
+
+  <!-- 1 三问区：永远存在 -->
+  <section class="ask3" id="ask3">
+    <p class="a1" id="a-where"></p>
+    <p class="a2" id="a-stuck"></p>
+    <p class="a3" id="a-next"></p>
+  </section>
+
+  <!-- 2 红灯区 -->
+  <section class="zone" id="zone-block">
+    <h2>拦着你的事</h2>
+    <div id="blockers"></div>
+  </section>
+
+  <!-- 3 要你回答区 -->
+  <section class="zone" id="zone-human">
+    <h2>要你回答</h2>
+    <div id="humans"></div>
+  </section>
+
+  <!-- 4 建议区：有待处理建议才出现 -->
+  <section class="zone" id="zone-prop" hidden>
+    <h2>给你的建议</h2>
+    <div id="props"></div>
+  </section>
+
+  <!-- 5 谁在干活区 -->
+  <section class="zone" id="zone-rounds">
+    <h2>谁在干活</h2>
+    <div id="rounds"></div>
+  </section>
+</main>
+
+<p id="boot" class="boot">正在打开…</p>
+
+<script src="/app.js"></script>
+</body>
+</html>

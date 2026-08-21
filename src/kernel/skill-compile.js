@@ -204,6 +204,10 @@ function buildGates(gates, stages) {
       severity: g.severity || inferSeverity(g, stage),
       desc: g.description,
       hint: g.hint,
+      // 这条要不要交文件。包在 SKILL.md 里写「需要凭据:…」就是要，没写就是不要。
+      // 界面靠这一位决定要不要在卡片里嵌上传框（§14.2 第 3 区）；丢了这一位，
+      // 人就只能在界面上答完字、再去别处找地方传照片——他不会去，这条就永远差着凭据。
+      needsEvidence: Boolean(g.evidence),
       // 生成缺省提问组（human 门禁）
       defaultPrompt: g.type === 'human' ? buildDefaultPrompt(g) : null,
     };
