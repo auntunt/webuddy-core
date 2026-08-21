@@ -136,7 +136,10 @@ try {
     strict: { type: 'boolean' },
     yes: { type: 'boolean' },
     'fail-on': { type: 'string' },
-    'content-file': { type: 'string' }
+    'content-file': { type: 'string' },
+    pack: { type: 'string' },
+    desc: { type: 'string' },
+    by: { type: 'string' }
   };
 
   config.options = commonFlags;
