@@ -1,0 +1,179 @@
+# 发版：打 v 开头的 tag 时，自动打出三个平台的单文件可执行程序并挂到 Release 上。
+#
+# 打包方式见 scripts/build-sea.mjs 的头注：Node 官方的单文件方案（SEA）里塞一份
+# 整个应用的压缩包，第一次运行时解到用户目录下再跑。不引任何打包器，
+# 所以 package.json 的 dependencies/devDependencies 照旧恒空。
+#
+# 为什么 32 位 Windows 也能在 64 位机器上打出来：sea-config.json 里
+# useCodeCache 是关掉的，blob 里没有跟 CPU 架构绑定的代码缓存，
+# 注进哪个架构的 node.exe 就是哪个架构的程序。
+
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '要发的 tag（手动触发时用，比如 v0.2.0）'
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  # 内置的 Node 运行时版本。用户机器上装没装 node 都不影响。
+  NODE_RUNTIME: '22.11.0'
+  # postject 是往可执行文件里注入 blob 的官方工具，只在 CI 上临时用（npx），
+  # 不进 package.json —— 零依赖铁律说的是这个仓库的依赖表，不是构建机器上的工具。
+  POSTJECT: 'postject@1.0.0-alpha.6'
+  FUSE: 'NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2'
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: macos-arm64
+            os: macos-latest
+            asset: WeBuddy-macos-arm64.zip
+          - target: windows-x64
+            os: windows-latest
+            asset: WeBuddy-windows-x64.exe
+          - target: windows-x86
+            os: windows-latest
+            asset: WeBuddy-windows-x86.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      # 跑构建脚本用的 Node，跟塞进成品里的那个不是一回事
+      - name: setup-node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # 发版前再跑一遍测试。打包一个自己都没过测试的东西出去，比不打包更坏。
+      - name: unit-tests
+        run: node --test
+
+      # 只生成载荷与配置。blob 必须由「即将被注入的那个 node」自己生成 ——
+      # SEA 的 blob 跟 Node 版本是绑死的，拿别的版本生成的 blob 注进去，
+      # 程序一起来就 FATAL ERROR: v8::ToLocalChecked Empty MaybeLocal（本机实测过）。
+      - name: build-payload
+        run: node scripts/build-sea.mjs sea-out
+
+      # ── macOS arm64 ──
+      - name: pack-macos
+        if: matrix.target == 'macos-arm64'
+        run: |
+          set -e
+          BASE="node-v${NODE_RUNTIME}-darwin-arm64"
+          curl -fsSL -o node.tar.gz "https://nodejs.org/dist/v${NODE_RUNTIME}/${BASE}.tar.gz"
+          tar -xzf node.tar.gz
+          "./${BASE}/bin/node" --experimental-sea-config sea-out/sea-config.json
+          APP="WeBuddy.app"
+          mkdir -p "$APP/Contents/MacOS"
+          cp "${BASE}/bin/node" "$APP/Contents/MacOS/webuddy-bin"
+          codesign --remove-signature "$APP/Contents/MacOS/webuddy-bin"
+          npx --yes "$POSTJECT" "$APP/Contents/MacOS/webuddy-bin" NODE_SEA_BLOB sea-out/sea-prep.blob \
+            --sentinel-fuse "$FUSE" --macho-segment-name NODE_SEA
+          codesign --sign - "$APP/Contents/MacOS/webuddy-bin"
+
+          # 双击 .app 时苹果不给终端窗口，而这个程序要把「看板开着呢：http://…」
+          # 和「要关的话按 Ctrl+C」说给人听 —— 所以真正的可执行文件是一层壳，
+          # 由它把本体放到终端里跑。这跟 launchers/打开看板.command 是同一套做法。
+          cat > "$APP/Contents/MacOS/WeBuddy" <<'SH'
+          #!/bin/bash
+          open -a Terminal "$(cd "$(dirname "$0")" && pwd)/webuddy-bin"
+          SH
+          chmod +x "$APP/Contents/MacOS/WeBuddy"
+
+          cat > "$APP/Contents/Info.plist" <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>CFBundleName</key><string>WeBuddy</string>
+            <key>CFBundleDisplayName</key><string>WeBuddy 看板</string>
+            <key>CFBundleExecutable</key><string>WeBuddy</string>
+            <key>CFBundleIdentifier</key><string>com.auntunt.webuddy</string>
+            <key>CFBundlePackageType</key><string>APPL</string>
+            <key>CFBundleVersion</key><string>1</string>
+          </dict></plist>
+          PLIST
+
+          # Release 只能挂单个文件，.app 是个目录，压起来。
+          # -y 保留符号链接，别把壳压坏了。
+          ditto -c -k --keepParent "$APP" "${{ matrix.asset }}"
+
+      # ── Windows x64 / x86 ──
+      # 同一段脚本跑两遍，只差下载哪个架构的 node.exe
+      - name: pack-windows
+        if: startsWith(matrix.target, 'windows')
+        shell: bash
+        run: |
+          set -e
+          case "${{ matrix.target }}" in
+            windows-x64) ARCH=x64 ;;
+            windows-x86) ARCH=x86 ;;
+          esac
+          BASE="node-v${NODE_RUNTIME}-win-${ARCH}"
+          curl -fsSL -o node.zip "https://nodejs.org/dist/v${NODE_RUNTIME}/${BASE}.zip"
+          unzip -q node.zip
+          # 32 位的 node.exe 在 64 位 runner 上照样跑得起来（WOW64），
+          # 所以 x86 的 blob 也能在这台 x64 机器上由它自己生成
+          "./${BASE}/node.exe" --experimental-sea-config sea-out/sea-config.json
+          cp "${BASE}/node.exe" "${{ matrix.asset }}"
+          npx --yes "$POSTJECT" "${{ matrix.asset }}" NODE_SEA_BLOB sea-out/sea-prep.blob \
+            --sentinel-fuse "$FUSE"
+
+      - name: smoke-test
+        shell: bash
+        run: |
+          set -e
+          case "${{ matrix.target }}" in
+            macos-arm64)
+              # 直接跑本体，不走 .app 那层终端壳（CI 上没有终端可开）
+              OUT="$(./WeBuddy.app/Contents/MacOS/webuddy-bin --version)" ;;
+            windows-x64)
+              OUT="$(./${{ matrix.asset }} --version)" ;;
+            windows-x86)
+              # 32 位程序在 64 位 Windows 上跑得起来（WOW64），照样验一遍
+              OUT="$(./${{ matrix.asset }} --version)" ;;
+          esac
+          echo "冒烟输出：$OUT"
+          case "$OUT" in
+            webuddy-core*) echo "✓ 可执行文件能跑，自解压这一步是通的" ;;
+            *) echo "✗ 跑起来了但输出不对：$OUT"; exit 1 ;;
+          esac
+
+      - name: upload-artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: ${{ matrix.asset }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+      - name: download-all
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      # 用 gh CLI 而不是第三方 action：runner 上本来就装着，少一个要信任的东西
+      - name: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          ls -lh dist
+          gh release create "$TAG" --title "WeBuddy $TAG" --generate-notes --verify-tag || \
+            echo "Release 已存在，只补文件"
+          gh release upload "$TAG" dist/* --clobber
