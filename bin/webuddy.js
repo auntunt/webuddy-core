@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util';
 import fs from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -118,7 +118,15 @@ if (!fs.existsSync(cmdPath)) {
 
 // Load and run command
 try {
-  const cmdModule = await import(cmdPath);
+  /**
+   * 动态 import 必须给 file:// URL，不能给裸的绝对路径。
+   *
+   * POSIX 上 /a/b/c.js 恰好也能用，所以这处错了三个月没人发现；
+   * Windows 上 D:\\a\\b\\c.js 会被 ESM loader 当成协议名 d:，
+   * 报「Only URLs with a scheme in: file, data, and node are supported」，
+   * 于是每一条命令在 Windows 上都起不来 —— 不只是测试红，打出来的程序本身就是废的。
+   */
+  const cmdModule = await import(pathToFileURL(cmdPath).href);
 
   // Parse flags using parseArgs
   const config = {

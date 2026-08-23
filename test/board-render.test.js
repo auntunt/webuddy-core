@@ -415,7 +415,9 @@ test('真项目算出来的待答条目，要交文件的那条带上传框', as
   const { evaluate } = await import('../src/kernel/evaluate.js');
   const { buildVerdict } = await import('../src/kernel/verdict.js');
 
-  const HERE = path.dirname(new URL(import.meta.url).pathname);
+  // import.meta.dirname 而不是 new URL(...).pathname：后者在 Windows 上给出
+  // /D:/a/... 这种带前导斜杠的东西，path.join 拼出来的路径根本不存在
+  const HERE = import.meta.dirname;
   const res = await loadPack(path.join(HERE, '..', 'packs', 'construction-safety'));
   assert.equal(res.ok, true, `包没加载起来：${(res.errors || []).join('；')}`);
 
@@ -449,7 +451,9 @@ test('真项目算出来的整页，禁词零命中', async () => {
   const { evaluate } = await import('../src/kernel/evaluate.js');
   const { buildVerdict } = await import('../src/kernel/verdict.js');
 
-  const HERE = path.dirname(new URL(import.meta.url).pathname);
+  // import.meta.dirname 而不是 new URL(...).pathname：后者在 Windows 上给出
+  // /D:/a/... 这种带前导斜杠的东西，path.join 拼出来的路径根本不存在
+  const HERE = import.meta.dirname;
   const res = await loadPack(path.join(HERE, '..', 'packs', 'construction-safety'));
   assert.equal(res.ok, true);
   const dir = path.join(HERE, 'fixtures', 'golden-src', 'construction-project');

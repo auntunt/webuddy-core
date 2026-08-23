@@ -12,6 +12,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -21,7 +22,7 @@ const PACK_DIR = path.join(ROOT, 'packs/software-engineering');
 
 // 导入 ref 的 stages
 const stagesPath = path.join(REF_SRC, 'stages.js');
-const stagesModule = await import(`file://${stagesPath}`);
+const stagesModule = await import(pathToFileURL(stagesPath).href);
 const { STAGES, ALL_GATES } = stagesModule;
 
 console.log(`📦 开始生成软件工程包...`);
@@ -70,7 +71,7 @@ console.log(`\n📝 生成 prompts.md...`);
 
 // 导入 prompts
 const promptsPath = path.join(REF_SRC, 'prompts.js');
-const promptsModule = await import(`file://${promptsPath}`);
+const promptsModule = await import(pathToFileURL(promptsPath).href);
 const { PROMPTS, TOPICS } = promptsModule;
 
 let promptsMd = `# 提问组\n\n`;
