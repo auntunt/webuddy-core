@@ -58,7 +58,17 @@ jobs:
 
       # 发版前再跑一遍测试。打包一个自己都没过测试的东西出去，比不打包更坏。
       - name: unit-tests
-        run: node --test
+        shell: bash
+        run: |
+          set +e
+          node --test 2>&1 | tee test-output.txt
+          code=${PIPESTATUS[0]}
+          if [ "$code" -ne 0 ]; then
+            grep -E "^(not ok|[[:space:]]*✖|AssertionError|Error:|[[:space:]]+at )" test-output.txt \
+              | head -40 \
+              | while IFS= read -r line; do echo "::error::${line}"; done
+          fi
+          exit "$code"
 
       # 只生成载荷与配置。blob 必须由「即将被注入的那个 node」自己生成 ——
       # SEA 的 blob 跟 Node 版本是绑死的，拿别的版本生成的 blob 注进去，

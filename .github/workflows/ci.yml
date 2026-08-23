@@ -52,8 +52,21 @@ jobs:
           # 所以这一步失败不算数（golden 用的是 test/fixtures/ 下自带的素材）。
           ln -s .ref ref || echo "建不了符号链接（Windows 常见），跳过——测试不依赖 ref/"
 
+      # 失败时把测试名和断言摘成 ::error:: 注解。
+      # 原因很实际：Actions 的日志要仓库 admin 权限才读得到，而 check 注解
+      # 是公开可读的 —— 红了之后不必先去翻网页就能知道是哪条测试炸了。
       - name: unit-tests
-        run: node --test
+        shell: bash
+        run: |
+          set +e
+          node --test 2>&1 | tee test-output.txt
+          code=${PIPESTATUS[0]}
+          if [ "$code" -ne 0 ]; then
+            grep -E "^(not ok|[[:space:]]*✖|AssertionError|Error:|[[:space:]]+at )" test-output.txt \
+              | head -40 \
+              | while IFS= read -r line; do echo "::error::${line}"; done
+          fi
+          exit "$code"
 
       - name: pack-test
         shell: bash
@@ -74,6 +87,14 @@ jobs:
       - name: kernel-purity
         shell: bash
         run: |
-          hits=$(grep -rEc "八步|场景卡|scope-card|01-scope|TEST_HINT|SCHEMA_HINT|software" src/kernel/ | awk -F: '{s+=$2} END {print s+0}')
-          echo "内核里的行业专有物命中数：$hits"
-          test "$hits" -eq 0
+          # grep 一个都没找到时退出码是 1，而 shell: bash 会带上 -o pipefail ——
+          # 直接写 `grep … | wc -l` 会把「内核是干净的」变成 CI 失败（实测踩过）。
+          # 加 `|| true` 又会把「内核脏了」变成通过，两种写法都是反的。
+          # 所以用 if 接住 grep 的退出码，不在管道里数数。
+          if hits=$(grep -rEn "八步|场景卡|scope-card|01-scope|TEST_HINT|SCHEMA_HINT|software" src/kernel/); then
+            echo "内核里出现了行业专有物，这些得搬到包里去："
+            printf '%s\n' "$hits"
+            printf '%s\n' "$hits" | while IFS= read -r l; do echo "::error::内核纯净: ${l}"; done
+            exit 1
+          fi
+          echo "内核纯净：0 命中"

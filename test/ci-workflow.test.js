@@ -54,7 +54,7 @@ describe('.github/workflows/ci.yml（§I5）', () => {
   test('每一步跑的命令，本地都能原样跑', () => {
     assert.match(code, /git clone --depth 1 https:\/\/github\.com\/auntunt\/webuddy-console\.git \.ref\/webuddy-console/);
     assert.match(code, /ln -s \.ref ref/);
-    assert.match(code, /^\s*run:\s*node --test\s*$/m);
+    assert.match(code, /node --test 2>&1 \| tee test-output\.txt/);
     assert.match(code, /pack test "packs\/\$p"/);
     assert.match(code, /pack lint "packs\/\$p" --strict/);
     // 三个包都得跑到，不能只跑软件工程那一个
@@ -66,13 +66,16 @@ describe('.github/workflows/ci.yml（§I5）', () => {
   test('内核纯净那一步看的是命中计数，不是 grep 的退出码', () => {
     // grep 找不到东西时退出码是 1。直接 `grep …` 会让"干净"变成"失败"，
     // 而加 `|| true` 又会让"脏了"变成"通过"——两种写法都是反的。
-    assert.match(code, /grep -rEc[^\n]*src\/kernel\//);
-    assert.match(code, /test "\$hits" -eq 0/);
+    // grep 找不到东西时退出码是 1，而 shell: bash 带 -o pipefail：
+    // 在管道里数数会让「内核是干净的」变成失败（v0.1.0 那轮实测踩过）；
+    // 加 || true 又会让「内核脏了」变成通过。用 if 接住退出码才是对的。
+    assert.match(code, /if hits=\$\(grep -rEn[^\n]*src\/kernel\//);
     assert.doesNotMatch(code, /grep[^\n]*\|\|\s*true/);
+    assert.doesNotMatch(code, /grep -rE[^\n]*src\/kernel\/[^\n]*\|\s*(wc|awk)/, '别在管道里数 grep 的结果');
   });
 
   test('CI 里的禁词表跟终局判据 6 那条 grep 逐字一致', () => {
-    const m = /grep -rEc "([^"]+)" src\/kernel\//.exec(code);
+    const m = /grep -rEn "([^"]+)" src\/kernel\//.exec(code);
     assert.ok(m, 'CI 里找不到内核纯净那条 grep');
     assert.equal(m[1], '八步|场景卡|scope-card|01-scope|TEST_HINT|SCHEMA_HINT|software');
   });
