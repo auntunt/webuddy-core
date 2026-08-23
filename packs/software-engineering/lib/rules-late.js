@@ -181,14 +181,9 @@ export const RULES_LATE = {
   // 4.9/4.10 必须留 native：两条都要出 na / fix，而探测表达式只有 pass 和 fail
   // 两个出口。「还没有组件清单所以不用对照」（na）跟「清单里有不该有的东西」（fail）
   // 是两件事，压成一个 fail 就是把"还没走到"说成"走错了"。
-  '4.9': (f) => {
-    if (!f.eng.pkg) return { r: NA, detail: '还没有组件清单，无从对照' };
-    const OFF_STACK = ['react-redux', 'redux', 'mongoose', 'mongodb', '@apollo/server', 'graphql', 'kubernetes-client', 'styled-components', 'emotion'];
-    const found = Object.keys(f.eng.deps).filter((d) => OFF_STACK.some((o) => d === o || d.startsWith(`${o}/`)));
-    return found.length === 0
-      ? { r: P }
-      : { r: X, detail: `AI 用了约定方案之外的组件：${found.join('、')}。不一定错，但得你点头一次——问它一句为什么非要换，理由说不通就让它换回来` };
-  },
+  // 4.9 已翻成 DSL 并删除（GOAL-2 I2c）：它要的三种答案里
+  // na 由第 12 个原语 applies-if 给出，fix 由小节指令「不过时算: fix」给出，
+  // 判据本身只是在 package.json 里找那几个组件名——regex-hit 就够。
   // 4.10 交给 DSL：三个约定位置（package.json / src / tests）在不在，file-exists 就够。
   // ref 那条判 fix（摆得不一样是提示不是拦路），而这条门禁在 mvp 下本来就静默，
   // 提示级的差别不影响任何结论——换成两态判定是这一条上最省的选择。

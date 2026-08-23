@@ -357,21 +357,142 @@ function projectCard(row, opts) {
   return card;
 }
 
+/* ---------- 第一次用的引导卡（§I4b）---------- */
+
+/**
+ * 演示包和真包都用这一个名字。写死一个具体的名字，不写「<包名>」那种占位符——
+ * 用户画像是计算机小白，占位符对他等于"这里我该填什么"，而他填不出来。
+ */
+const DEMO_NAME = 'construction-safety';
+
+/**
+ * 要技术同事照着敲的那几行。单独一个函数，是因为这些是**原样的命令**，
+ * 不是给人读的话：它们不过 g()（翻译了就跑不起来），也不参与大白话检查
+ * （命令里天然带英文单词）。所以统一打上 data-role="cmd" 这个记号，
+ * 检查那边照这个记号把它们摘出去单独比对——摘出去的东西必须是逐字写死的，
+ * 否则这个口子就成了往界面上偷运术语的通道。
+ */
+function cmdLine(text) {
+  const n = el('code', 'cmd', text);
+  n.dataset.role = 'cmd';
+  return n;
+}
+
+/**
+ * 第一次打开时的引导卡：一屏读完，读完知道下一步点哪儿。
+ *
+ * 只认一个信号——服务回来的项目列表是空的。不看浏览器里存的东西：
+ * 换台电脑、换个浏览器、清一次缓存都会让"看过没看过"这件事说不准，
+ * 而"一个项目都没有"这件事在哪台电脑上都成立。
+ *
+ * 三段是定死的顺序：这是什么 → 三个词 → 现在做哪个。
+ * 先讲概念再讲用途，人会在第二段就关掉。
+ */
+function guideCard() {
+  const card = el('div', 'guide');
+
+  // 1 这是什么。两句：一句说它替你盯什么，一句说你要干什么。
+  card.appendChild(el('h2', 'g-h', '第一次打开？花 30 秒读完这一页'));
+  card.appendChild(el('p', 'g-what',
+    '这块看板只回答一件事：这个项目走到第几步了，还差什么才能交活。'
+    + '你不用学任何工具，看板上写着什么，你就去做什么、或者把那句话转给能做的人。'));
+
+  // 2 三个词。用户在后面每一页都会撞见这三个词，先在这儿一句话说清。
+  card.appendChild(el('h3', 'g-h', '会用到三个词，一句话就够'));
+  card.appendChild(el('p', 'g-term',
+    '检查项：每一步该做到的事，一条一条写清楚，比如「脚手架验收单要签字」。'));
+  card.appendChild(el('p', 'g-term',
+    '顺序反了：活已经干到第 8 步，第 1 步该先说清的东西还缺着，'
+    + '这时候得先回头把第 1 步补上，往下干只会越错越多。'));
+  card.appendChild(el('p', 'g-term',
+    '留痕：嘴上说做过了不算数，得有照片、签字单这类看得见的东西存在项目文件夹里。'));
+
+  // 3 两个动作。练手在前：先花 10 分钟摸清界面，比上来就动真项目稳。
+  card.appendChild(el('h3', 'g-h', '现在做哪一个'));
+  card.appendChild(guideDemo());
+  card.appendChild(guideReal());
+  return card;
+}
+
+/** 动作一：用演示项目练手。命令摆在明面上，因为它不会动到任何真东西。 */
+function guideDemo() {
+  const box = el('div', 'act');
+  box.appendChild(el('p', 'act-t', '① 用演示项目练手'));
+  box.appendChild(el('p', null,
+    '先拿一个假项目试 10 分钟：看板长什么样、该点哪儿，点一遍就明白，'
+    + '怎么点都弄不坏真项目。'));
+  box.appendChild(el('p', null,
+    '这一行要请技术同事在电脑上跑一次（只跑一次，以后不用了）：'));
+  box.appendChild(cmdLine('webuddy demo ' + DEMO_NAME));
+  box.appendChild(el('p', 'g-tip', '他跑完，你把这一页刷新一下，演示项目的卡片就出来了。'));
+  return box;
+}
+
+/**
+ * 动作二：接入真项目。默认只有一个按钮，点一下才把内容建出来。
+ *
+ * 为什么是"点了才建"而不是"建好了藏着"：藏着的那段里有两行原样的命令，
+ * 而这一页（还一个项目都没有的时候）对着的是不懂技术的人。
+ * 没点开就等于没问过这件事，页面上就不该有那两行——
+ * 藏起来的东西照样会被读屏软件念出来、被搜索框搜到、被某天写错的 hidden 漏出来。
+ *
+ * 展开一层就到底：按钮在卡片下一层，点击深度 ≤2（§2.5 铁律 3）。
+ */
+function guideReal() {
+  const box = el('div', 'act');
+  const shut = '② 接入真项目（点开看要转给谁）';
+  const btn = el('button', 'ghost act-open', shut);
+  let body = null;
+  btn.onclick = function () {
+    if (!body) {
+      body = guideRealBody();
+      box.appendChild(body);
+    } else {
+      body.hidden = !body.hidden;
+    }
+    btn.textContent = body.hidden ? shut : '② 接入真项目';
+  };
+  box.appendChild(btn);
+  return box;
+}
+
+/** 点开之后露出来的那一段：一句交待 + 一整段可以照抄的话 + 两行命令。 */
+function guideRealBody() {
+  const body = el('div', 'act-body');
+  body.appendChild(el('p', null,
+    '挂上检查清单这一步要在电脑上敲两行，你不用自己敲。'
+    + '把下面整段话原样转给帮你装的技术同事就行：'));
+
+  const script = el('div', 'script');
+  script.appendChild(el('p', 'script-t', '把这段话转给技术同事：'));
+  script.appendChild(el('p', null,
+    '请帮我把这个项目文件夹挂上检查清单，再把它加到看板上，两行：'));
+  script.appendChild(cmdLine('webuddy pack mount <项目文件夹> ' + DEMO_NAME));
+  script.appendChild(cmdLine('webuddy open <项目文件夹>'));
+  script.appendChild(el('p', null,
+    '<项目文件夹> 换成我们项目的那个文件夹。跑完跟我说一声，我刷新一下就能看见。'));
+  body.appendChild(script);
+  body.appendChild(el('p', 'g-tip', '他跑完，这一页就会出现你的项目卡片，点进去看该做什么。'));
+  return body;
+}
+
 function drawList(rows, opts) {
   const box = $('#cards');
   const emptyBox = $('#list-empty');
   if (!rows || rows.length === 0) {
+    // 一个项目都没有 = 这个人多半是第一次打开。这里不摆一句干话，
+    // 直接摆整张引导卡（§I4b）：空状态即引导（§2.5 铁律 4）。
     emptyBox.hidden = false;
-    // 这句话是给不懂技术的人看的，所以不写命令行（§2.5 铁律 2 禁词零命中）。
-    // 要跑哪几条命令写在包的 README 里，技术同事看那儿。
-    emptyBox.textContent =
-      '还没有项目。把这句话转给帮你装的技术同事就行：'
-      + '「请帮我把项目文件夹挂上检查清单，再把它加到看板上。」'
-      + '装好之后这一页就会出现项目卡片，点进去看该做什么。';
+    emptyBox.classList.add('guide-host');
+    emptyBox.replaceChildren(guideCard());
     box.replaceChildren();
     return;
   }
+  // 有项目了就把引导卡整个扔掉，不只是藏起来——留着它，
+  // 页面上就一直躺着两行命令，将来某个 hidden 写错就会漏到用户眼前。
   emptyBox.hidden = true;
+  emptyBox.classList.remove('guide-host');
+  emptyBox.replaceChildren();
   const kids = [];
   for (let i = 0; i < rows.length; i += 1) kids.push(projectCard(rows[i], opts));
   box.replaceChildren.apply(box, kids);

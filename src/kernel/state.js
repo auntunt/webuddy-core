@@ -19,9 +19,8 @@ export function statePath(dir, ...segs) {
  * 这个目录是不是某个担架包自带的示例项目（I1a）。
  *
  * 判据：绝对路径里存在某个祖先目录名叫 fixtures，且这个 fixtures 的上级
- * （包目录本身）或上上级里放着 pack.json —— 例如
- * packs/software-engineering/fixtures/broken，其 fixtures 的上级
- * packs/software-engineering 下有 pack.json。
+ * （包目录本身）或上上级里放着 pack.json —— 例如 packs/<包名>/fixtures/broken，
+ * 其 fixtures 的上级 packs/<包名> 下有 pack.json。内核不认识任何具体包名。
  *
  * 为什么要认它：这些目录是被 git 跟踪的素材，对它们跑一次 check 就往
  * fixtures/*​/.webuddy/records.jsonl 里追加一条巡检记录，仓库当场变脏；

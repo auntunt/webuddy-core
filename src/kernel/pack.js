@@ -68,19 +68,48 @@ export async function loadPack(packDir) {
     return { ok: false, errors };
   }
 
-  // 3. 解析 probes.md
+  /**
+   * 3. 解析 probes.md
+   *
+   * 小节里表达式之前可以写一行「不过时算: fix」或「不过时算: ask」（I2b）。
+   * 它不是原语，是门禁级的映射：探测表达式照旧只答"过 / 不过"，
+   * 而"不过"这两个字对人的意思有三种——你做错了（fail）、
+   * 你还差一件事没做（fix）、机器看不准你自己看一眼（ask）。
+   * 把这个分档放在小节头上而不是塞进表达式，是为了让表达式保持纯粹：
+   * 表达式只回答事实，档位归门禁。
+   */
   const probes = new Map();
+  const probeMiss = new Map();
   const probesPath = path.join(packDir, 'probes.md');
+  const MISS_ALLOWED = ['fix', 'ask'];
   if (fs.existsSync(probesPath)) {
     const probesText = fs.readFileSync(probesPath, 'utf8');
     const probesSections = parseSections(probesText);
-    for (const [gateId, expr] of Object.entries(probesSections)) {
+    for (const [gateId, body] of Object.entries(probesSections)) {
+      const exprLines = [];
+      let miss = null;
+      let missBad = false;
+      for (const line of body.split('\n')) {
+        const m = /^不过时算[:：]\s*(\S+)\s*$/.exec(line.trim());
+        if (m && exprLines.every((l) => l.trim() === '')) {
+          if (!MISS_ALLOWED.includes(m[1])) {
+            errors.push(`门禁 ${gateId} 的「不过时算」只认 fix 或 ask，写的是「${m[1]}」`);
+            missBad = true;
+          } else {
+            miss = m[1];
+          }
+          continue;
+        }
+        exprLines.push(line);
+      }
+      const expr = exprLines.join('\n').trim();
       const result = parseProbe(expr);
       if (!result.ok) {
         errors.push(`门禁 ${gateId} 的探测表达式有误: ${result.why}`);
       } else {
         probes.set(gateId, result.ast);
       }
+      if (miss && !missBad) probeMiss.set(gateId, miss);
     }
   }
 
@@ -164,6 +193,20 @@ export async function loadPack(packDir) {
     }
   }
 
+  /**
+   * b2) human 门禁的小节里不许写「不过时算」（I2b）。
+   *
+   * human 门禁根本不走 probes（evaluate.js 判 human 时在 judgeHuman +
+   * humanPrecheck 之后就 return 了），写了就是一句永远不生效的配置。
+   * 死配置比没配置坏：包作者以为自己改了行为，实际什么都没发生。
+   */
+  const humanIds = new Set(humanGates.map((g) => g.id));
+  for (const id of probeMiss.keys()) {
+    if (humanIds.has(id)) {
+      errors.push(`门禁 ${id} 是 human 门禁，不走探测表达式，「不过时算」写了也不会生效——删掉这一行`);
+    }
+  }
+
   // c) probes.md / prompts.md 出现的 gateId 必须存在
   const gateIds = new Set(gates.map((g) => g.id));
   for (const id of probes.keys()) {
@@ -189,12 +232,19 @@ export async function loadPack(packDir) {
     return { ok: false, errors };
   }
 
-  // 8. 合并提问组（prompts.md 整组覆盖缺省）
+  /**
+   * 8. 合并提问组（prompts.md 整组覆盖缺省）
+   *
+   * 除 human 门禁外，写了「不过时算: ask」的 auto 门禁也留提问组（I2b）：
+   * 它判出 ask 时走的是同一条"等人答"的通道，界面上要有话问。
+   * 不留的话，这类门禁在看板上只有一句"你自己看一眼"，看一眼什么全靠猜。
+   */
   const finalPrompts = [];
   for (const g of gates) {
-    if (g.mode === 'human') {
+    const asksHuman = g.mode === 'human' || probeMiss.get(g.id) === 'ask';
+    if (asksHuman) {
       const customPrompt = prompts.get(g.id);
-      const prompt = customPrompt || g.defaultPrompt;
+      const prompt = customPrompt || (g.mode === 'human' ? g.defaultPrompt : null);
       if (prompt) finalPrompts.push(prompt);
     }
   }
@@ -205,6 +255,8 @@ export async function loadPack(packDir) {
     stages: Object.freeze(stages.map((s) => Object.freeze({ ...s }))),
     gates: Object.freeze(gates.map((g) => Object.freeze({ ...g }))),
     probes: Object.freeze(probes),
+    // 门禁号 → 'fix'|'ask'：表达式没过时该落成哪一档，缺省不在表里 = fail
+    probeMiss: Object.freeze(probeMiss),
     prompts: Object.freeze(finalPrompts.map((p) => Object.freeze({ ...p }))),
     glossary: Object.freeze({ ...glossary }),
     lexicons: Object.freeze({ ...lexicons }),

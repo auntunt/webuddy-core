@@ -143,7 +143,8 @@ function buildHumanPending(evalResult) {
       id: v.id,
       stage: v.stage,
       lead: v.say || '',
-      asks: [],
+      // 「不过时算: ask」映射过来的门禁若有自己的提问组，判定时已经挂在 askGroup 上
+      asks: (v.askGroup?.asks || []).map((a) => ({ key: a.key, q: a.q, why: a.why || '' })),
     }));
   }
 

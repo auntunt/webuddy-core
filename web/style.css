@@ -149,3 +149,50 @@ button:disabled { opacity: .55; cursor: default; }
 .adv summary { cursor: pointer; }
 .boot { max-width: 46rem; margin: 2rem auto; padding: 0 1.2rem; color: var(--dim); }
 .bad { color: var(--red); }
+
+/* 第一次打开时的引导卡（§I4b）。它不是"没东西"的占位，是这一页的正文，
+   所以不跟 .empty 一样用灰字虚线——灰的东西人不会读。 */
+.guide-host { color: var(--ink); border-style: solid; background: var(--card); }
+.guide h2 { font-size: 1.2rem; margin: .2rem 0 .5rem; }
+.guide h3 { font-size: 1rem; margin: 1.2rem 0 .4rem; color: var(--dim); }
+.guide .g-what { margin: 0 0 .2rem; }
+.guide .g-term { margin: .35rem 0; }
+.guide .g-tip { color: var(--dim); margin: .4rem 0 0; }
+
+.act {
+  border: 1px solid var(--line);
+  border-radius: .5rem;
+  padding: .8rem 1rem;
+  margin: .6rem 0 0;
+  background: #fbfbfc;
+}
+
+.act .act-t { font-weight: 600; margin: 0 0 .3rem; }
+.act .act-open { margin: 0; }
+.act .act-body { margin-top: .6rem; }
+
+/* 命令原样显示：可以整段选中复制，长了就横向滚，不折行——
+   折行会让人以为要敲两行。 */
+.cmd {
+  display: block;
+  margin: .5rem 0;
+  padding: .5rem .7rem;
+  border: 1px solid var(--line);
+  border-radius: .4rem;
+  background: #fff;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: .95rem;
+  overflow-x: auto;
+  white-space: pre;
+  user-select: all;
+}
+
+.script {
+  border-left: 4px solid var(--link);
+  padding: .1rem .9rem;
+  margin: .6rem 0;
+  background: #fff;
+  border-radius: .3rem;
+}
+
+.script .script-t { font-weight: 600; margin: .6rem 0 .2rem; }

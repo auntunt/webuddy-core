@@ -134,6 +134,13 @@ all(
   no-placeholder("artifacts/03-nonfunctional.md")
 )
 
+### 4.9 组件都在约定方案里（没有组件清单的项目不用管这条）
+不过时算: fix
+applies-if(
+  file-exists("package.json"),
+  not(regex-hit("package.json", "\"(react-redux|redux|mongoose|mongodb|@apollo/server|graphql|kubernetes-client|styled-components|emotion)(/[^\"]*)?\"\\s*:", "约定方案之外的组件"))
+)
+
 ### 4.10 文件摆放跟约定一致（换人接手能猜到东西在哪；与 ref 的差异见 README「与 ref 有意不一致的一条」）
 all(
   file-exists("package.json"),

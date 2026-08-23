@@ -7,8 +7,8 @@
 ## 铁律
 - 零依赖:纯 Node ≥20 ESM,dependencies/devDependencies 恒空;node:test 是标准库,无需安装。
 - src/kernel/ 里 grep 不到任何行业专有物(门禁 ID、TEST_HINT 类正则一律在包里)。
-- 探测 DSL 原语封顶 12(现 11 + 1 保留空位,空位不写代码);连接词只有 all/any/not。
-  想加原语 = 先想怎么降级 human。
+- 探测 DSL 原语封顶 12,现已满员、永久封版(第 12 个是 applies-if,GOAL-2 I2a 落地);
+  连接词只有 all/any/not。想加原语 = 先想怎么降级 human。
 - 面向用户的字符串全部大白话:带具体数字、文件名、怎么办。机器输出(--json/HTTP)不做术语替换。
 - 易用性八铁律(GOAL.md §2.5)约束一切用户面:三问原则、术语零暴露(禁词表 glossary-base.json)、
   点击深度 ≤2、空状态即引导、报错三段式、不问技术参数、破坏性操作说后果、一个入口。

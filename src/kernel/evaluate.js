@@ -132,7 +132,7 @@ function humanPrecheck(gate, env) {
  * 结果跟着变，这是故意的：模式只能改变「拦不拦」，不能改变「过没过」。
  */
 function judgeGate(gate, sev, env) {
-  const { ctx, probes, nativeRules, naGates, records, instanceVersion } = env;
+  const { ctx, probes, probeMiss, prompts, nativeRules, naGates, records, instanceVersion } = env;
   // needsEvidence 跟着门禁一路传到界面：包说这条要交文件，卡片上就得有上传框。
   // 只在为真时带上，免得给每条门禁都加一个 false 字段。
   const base = {
@@ -180,11 +180,42 @@ function judgeGate(gate, sev, env) {
         how: gate.hint || '',
       };
     }
+    /**
+     * 「不过时算」的门禁级映射（I2b）。
+     *
+     * 表达式只答过 / 不过 / 不适用三样；「不过」落成哪一档由门禁自己说了算：
+     *   缺省      = fail   你做错了
+     *   fix       = fix    你还差一件事没做
+     *   ask       = ask    机器看不准，你自己看一眼
+     * 只映射 fail —— pass 和 na 是事实，不该被档位改写。
+     */
+    let r = out.r;
+    let say = out.detail || gate.desc || '';
+    let askGroup = null;
+    if (r === 'fail' && probeMiss && probeMiss.get(gate.id)) {
+      r = probeMiss.get(gate.id);
+      if (r === 'ask') {
+        /**
+         * ask 走的是"等人答"这条通道，界面上要有话问。
+         * 门禁自己有提问组就用它的；没有就拿探测的说法直接问人——
+         * 光说"待确认"而不说待确认什么，人打开看板只会更懵。
+         */
+        const pg = (prompts || []).find((x) => x.id === gate.id) || null;
+        if (pg) {
+          say = pg.lead || say;
+          askGroup = { asks: pg.asks || [] };
+        } else {
+          say = `机器看不准：${out.detail || gate.desc || ''}，你自己看一眼`;
+        }
+      }
+    }
+
     return {
       ...base,
-      r: out.r,
-      say: out.detail || gate.desc || '',
+      r,
+      say,
       how: gate.hint || '',
+      ...(askGroup ? { askGroup } : {}),
       ...(out.evidence ? { evidence: out.evidence } : {}),
     };
   }
@@ -521,6 +552,8 @@ export function evaluate(
   const env = {
     ctx, hooks, records, instanceVersion, naGates,
     probes: pack.probes instanceof Map ? pack.probes : new Map(),
+    probeMiss: pack.probeMiss instanceof Map ? pack.probeMiss : new Map(),
+    prompts: pack.prompts || [],
     nativeRules: pack.nativeRules || null,
   };
 

@@ -12,10 +12,34 @@ import { statePath } from './state.js';
 export function evalProbe(ast, ctx) {
   const { fn, args } = ast;
 
+  /**
+   * 第 12 个原语 applies-if(条件, 正题)。
+   *
+   * 条件不成立 = 这个项目根本没有这回事,整条判 na（不适用）。
+   * 条件成立 = 结果就是正题的结果,applies-if 本身不再插话。
+   *
+   * 为什么这不是"又一个连接词":all/any/not 只在 pass|fail 之间搬运,
+   * 而这一条是唯一一个能产出第三种答案的写法。分不清"还没走到这一步"
+   * 和"走到了但做错了",工具会把前者说成后者——那是误报,
+   * 而误报会让人不再看工具说什么。
+   *
+   * 条件自己判出 na 时（applies-if 套 applies-if）整条也是 na:
+   * "不适用的前提"推不出"适用的结论"。
+   */
+  if (fn === 'applies-if') {
+    const cond = evalProbe(args[0].value, ctx);
+    if (cond.r !== 'pass') {
+      return { r: 'na', detail: naSay(cond.detail) };
+    }
+    return evalProbe(args[1].value, ctx);
+  }
+
   // 连接词
   if (fn === 'all') {
     for (const arg of args) {
       const result = evalProbe(arg.value, ctx);
+      // na 会传染：一个不适用的条件推不出"这条整体过了"，也推不出"没过"。
+      if (result.r === 'na') return result;
       if (result.r === 'fail') {
         return result; // 短路
       }
@@ -27,6 +51,7 @@ export function evalProbe(ast, ctx) {
     const failures = [];
     for (const arg of args) {
       const result = evalProbe(arg.value, ctx);
+      if (result.r === 'na') return result; // 同上，na 传染
       if (result.r === 'pass') {
         return result; // 短路
       }
@@ -39,6 +64,7 @@ export function evalProbe(ast, ctx) {
 
   if (fn === 'not') {
     const result = evalProbe(args[0].value, ctx);
+    if (result.r === 'na') return result; // 「不适用」取反还是不适用
     if (result.r === 'pass') {
       return { r: 'fail', detail: `不应该满足:${result.detail}` };
     } else {
@@ -46,7 +72,7 @@ export function evalProbe(ast, ctx) {
     }
   }
 
-  // 11 个原语
+  // 12 个原语（applies-if 在上面单独处理，它要拿到未求值的子表达式）
   const probes = {
     'file-exists': fileExists,
     'section-filled': sectionFilled,
@@ -67,6 +93,30 @@ export function evalProbe(ast, ctx) {
   }
 
   return probe(args, ctx);
+}
+
+/**
+ * 把条件的"没找着"改写成"这个项目没有这一项,不用管"。
+ *
+ * 同一件事从两个方向说，落到人眼里差别很大：
+ *   「找不到「08-台账.md」这个文件」——听着像你少交了东西；
+ *   「这个项目没有 08-台账.md，这条不用管」——听着像这条与你无关。
+ * 后者才是 na 的意思。认不出来的写法就原样带上，不硬编，
+ * 猜错了改写会比不改写更误导人。
+ */
+function naSay(detail) {
+  const d = String(detail || '').trim();
+  const pats = [
+    /^找不到「(.+?)」这个文件$/,
+    /^「(.+?)」这个文件还没有[,，]先建它$/,
+  ];
+  for (const re of pats) {
+    const m = re.exec(d);
+    if (m) return `这个项目没有 ${m[1]}，这条不用管`;
+  }
+  const sec = /^「(.+?)」里找不到「(.+?)」这一节$/.exec(d);
+  if (sec) return `这个项目没有 ${sec[1]} 的「${sec[2]}」这一节，这条不用管`;
+  return d ? `这个项目没走到这一步（${d}），这条不用管` : '这条对本项目不适用';
 }
 
 // ===== 原语实现 =====

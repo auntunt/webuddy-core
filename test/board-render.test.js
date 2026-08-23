@@ -467,3 +467,144 @@ test('真项目算出来的整页，禁词零命中', async () => {
   const hit = BANNED.filter((w) => txt.toLowerCase().includes(w.toLowerCase()));
   assert.deepEqual(hit, [], `真项目页面上冒出了这些词：${hit.join('、')}\n---\n${txt}`);
 });
+
+/* ---------- 第一次打开的引导卡（§I4b）---------- */
+
+/**
+ * 引导卡里那几行命令是**原样的字符串**，不是给人读的话：
+ * 翻译了就跑不起来，而命令天然带英文单词（webuddy pack mount）。
+ * 所以 app.js 给它们打了 data-role="cmd" 的记号，这里照记号把它们摘出来，
+ * 分成两拨各管各的：
+ *   - 摘剩下的（人真的要读的每一个字）→ 走禁词扫描，一个都不许漏；
+ *   - 摘出来的命令 → 必须逐字等于下面写死的那几条。
+ *
+ * 第二条是这个豁免口子的锁。只放行"带记号的节点"而不核对内容的话，
+ * 谁往命令块里塞一段解释，术语就从这个口子直接进了界面。
+ */
+function splitCmd(root) {
+  const cmds = [];
+  const prose = [];
+  const walk = (n) => {
+    for (const c of n.children) {
+      if (c.dataset && c.dataset.role === 'cmd') { cmds.push(c.text()); continue; }
+      if (c.children.length) walk(c);
+      else prose.push(c.text());
+    }
+  };
+  walk(root);
+  return { cmds, prose: prose.join(' \n ') };
+}
+
+/** 引导卡上允许出现的命令，逐字写死。多一条少一条都要在这儿改。 */
+const GUIDE_CMDS = [
+  'webuddy demo construction-safety',
+  'webuddy pack mount <项目文件夹> construction-safety',
+  'webuddy open <项目文件夹>',
+];
+
+/** 画一遍空列表，把 #list-empty 交出来。 */
+async function renderEmptyList() {
+  const ctx = await bootApp();
+  ctx.drawList([], {});
+  return ctx;
+}
+
+test('引导卡：一个项目都没有时，三段俱在（这是什么 / 三个词 / 两个动作）', async () => {
+  const ctx = await renderEmptyList();
+  const box = ctx.__mount('#list-empty');
+  assert.equal(box.hidden, false, '引导卡被藏起来了');
+  const t = box.text();
+
+  // 第一段：这是什么。两句话，说清"它管什么"和"你要干什么"
+  assert.match(t, /这块看板只回答一件事/, '缺「这是什么」这一段');
+  assert.match(t, /走到第几步了，还差什么才能交活/);
+  assert.match(t, /不用学任何工具/, '没说清用户自己要干什么');
+
+  // 第二段：三个词，各一句
+  assert.match(t, /检查项：/, '缺「检查项」这一条');
+  assert.match(t, /顺序反了：/, '缺「顺序反了」这一条');
+  assert.match(t, /留痕：/, '缺「留痕」这一条');
+  // 一句话说清得带个具体例子，不能只给定义
+  assert.match(t, /脚手架验收单要签字/, '「检查项」那一条没给例子');
+  assert.match(t, /第 8 步/, '「顺序反了」那一条没给具体数字');
+  assert.match(t, /照片、签字单/, '「留痕」那一条没说要留什么');
+
+  assert.equal(ctx.__mount('#cards').children.length, 0);
+});
+
+test('引导卡：两个动作都在，命令逐字对得上，且说明了要技术同事跑', async () => {
+  const ctx = await renderEmptyList();
+  const box = ctx.__mount('#list-empty');
+  const t = box.text();
+
+  // 动作一：用演示项目练手
+  assert.match(t, /用演示项目练手/, '缺「用演示项目练手」这个动作');
+  assert.match(t, /怎么点都弄不坏真项目/, '没说清练手是安全的');
+  assert.match(t, /请技术同事在电脑上跑一次/, '没说这条命令该谁跑、跑几次');
+
+  // 动作二：接入真项目。默认收着，点一下展开
+  assert.match(t, /接入真项目/, '缺「接入真项目」这个动作');
+  const acts = box.children[0].children.filter((c) => c.className.includes('act'));
+  assert.equal(acts.length, 2, '两个动作不是两块');
+  const btns = acts[1].children.filter((c) => c.tagName === 'BUTTON');
+  assert.equal(btns.length, 1, '「接入真项目」没有可以点开的按钮');
+  assert.equal(acts[1].children.filter((c) => c.className.includes('act-body')).length, 0,
+    '没点开就已经把那两行命令铺在页面上了');
+  btns[0].onclick();
+  const body = acts[1].children.find((c) => c.className.includes('act-body'));
+  assert.ok(body, '点了没展开');
+  assert.equal(body.hidden, false);
+
+  // 展开后：转给技术同事的那段话在，命令也在
+  assert.match(body.text(), /把这段话转给技术同事/, '缺「把这段话转给技术同事」这段可以照抄的话');
+  assert.match(body.text(), /请帮我把这个项目文件夹挂上检查清单/, '转给技术同事的话不是能直接照抄的一整段');
+
+  assert.deepEqual(splitCmd(box).cmds, GUIDE_CMDS, '引导卡上的命令跟写死的那几条对不上');
+});
+
+test('引导卡：点开「接入真项目」只要一下，点击深度 ≤2', async () => {
+  const ctx = await renderEmptyList();
+  // 跟 #humans 那几条一样，从卡片所在的那一层往下数：卡一层、按钮一层
+  const card = ctx.__mount('#list-empty').children[0];
+  assert.ok(card.className.includes('guide'), '引导卡不是 #list-empty 的头一个孩子');
+  const hits = interactiveDepths(card);
+  assert.equal(hits.length, 1, '引导卡上不该有第二个能点的东西');
+  assert.ok(hits[0].depth <= 2, `点开的按钮在第 ${hits[0].depth} 层，点得太深`);
+});
+
+test('引导卡上人要读的每个字，禁词零命中', async () => {
+  const ctx = await renderEmptyList();
+  const box = ctx.__mount('#list-empty');
+  // 先把「接入真项目」点开，收着的那一段也得一起扫
+  const acts = box.children[0].children.filter((c) => c.className.includes('act'));
+  acts[1].children.filter((c) => c.tagName === 'BUTTON')[0].onclick();
+
+  const { prose, cmds } = splitCmd(box);
+  assert.deepEqual(scanBanned(prose), [], `引导卡上漏出了术语：${prose}`);
+  assert.ok(prose.length > 200, '摘出来的正文太短，八成没渲染上');
+
+  // 术语表里的内部说法（门禁、倒挂、担架包……）一个都不许出现在引导卡上：
+  // 这几个词的用户说法就写在术语表的右边，写错边等于第一页就开始教黑话。
+  const keys = Object.keys(JSON.parse(await (await import('node:fs/promises')).readFile(
+    new URL('../src/kernel/glossary-base.json', import.meta.url), 'utf8')));
+  const bad = keys.filter((k) => prose.includes(k));
+  assert.deepEqual(bad, [], `引导卡上用了内部说法：${bad.join('、')}`);
+
+  // 命令那几行只许是写死的那几条，不许夹带别的
+  assert.deepEqual(cmds, GUIDE_CMDS);
+});
+
+test('引导卡：有项目的时候一个字都不留', async () => {
+  const ctx = await bootApp();
+  ctx.drawList([
+    { id: 'p1', alias: '望江路项目', dir: '/tmp/p1', stage: STAGE, verdict: verdictClean() },
+  ], {});
+  const box = ctx.__mount('#list-empty');
+  assert.equal(box.hidden, true, '有项目了还露着引导卡');
+  assert.equal(box.text(), '', '引导卡只是藏起来，字还在页面里');
+  assert.equal(box.children.length, 0);
+  assert.equal(interactiveDepths(box).length, 0, '藏起来的引导卡上还留着能点的东西');
+  // 藏之前的内容也不能靠 hidden 兜底：整段命令还在页面里，hidden 写错就会漏出来
+  assert.doesNotMatch(box.text(), /webuddy/);
+  assert.equal(ctx.__mount('#cards').children.length, 1);
+});

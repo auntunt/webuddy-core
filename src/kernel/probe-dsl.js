@@ -158,7 +158,14 @@ export function tokenize(src) {
   return tokens;
 }
 
-// 已知原语及其参数要求
+/**
+ * 已知原语及其参数要求。
+ *
+ * 连接词 3 个（all/any/not）+ 原语 12 个。原语表到此满员、永久封版：
+ * 表已满员，不再给新原语留位置；新需求一律降级 human（先想怎么让人看一眼，而不是加原语）。
+ * 封版的理由是易学：一个行业专家要能在一页纸里把全部原语看完，
+ * 表越长，包作者越倾向于"再加一个"而不是"想清楚这条该不该机器判"。
+ */
 const KNOWN_PROBES = {
   'all': { min: 1, types: ['expr'] },
   'any': { min: 1, types: ['expr'] },
@@ -173,7 +180,10 @@ const KNOWN_PROBES = {
   'no-placeholder': { min: 1, max: 1, types: ['string'] },
   'fresh-within': { min: 2, max: 2, types: ['string', 'number'] },
   'evidence-attached': { min: 2, max: 2, types: ['string', 'string'] },
-  'round-clean': { min: 1, max: 1, types: ['string'] }
+  'round-clean': { min: 1, max: 1, types: ['string'] },
+  // 第 12 个原语：先问"这条对本项目适用吗"，不适用就整条不适用（na）。
+  // 两个参数都必须是表达式 —— 写成字符串就是把条件当文件名，静默判错。
+  'applies-if': { min: 2, max: 2, types: ['expr', 'expr'] }
 };
 
 /**
@@ -283,6 +293,12 @@ export function parseProbe(src) {
         }
         if (expectedType === 'number' && actualType !== 'number') {
           return { ok: false, why: `第 ${ident.line} 行:${fn} 的第 ${i + 1} 个参数应该是数字` };
+        }
+        // applies-if 的两个参数都得是表达式。不查这一条的话，
+        // applies-if("a", "b") 会安安静静地过掉解析，到求值时才变成一句
+        // 「未实现的原语」——而那时候报的是判定失败，不是配置写错。
+        if (expectedType === 'expr' && actualType !== 'expr') {
+          return { ok: false, why: `第 ${ident.line} 行:${fn} 的第 ${i + 1} 个参数应该是一个探测表达式,不是${actualType === 'string' ? '字符串' : '数字'}` };
         }
       }
     }
