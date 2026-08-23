@@ -67,7 +67,8 @@ describe('webuddy hook install', () => {
       assert.deepEqual(Object.keys(h), ['type', 'command', 'timeout']);
       assert.equal(h.type, 'command');
       assert.equal(h.timeout, 5);
-      assert.match(h.command, /^node ".*bin\/webuddy\.js" hook run --agent claude-code$/);
+      // 分隔符两种都认：Windows 上这里是 bin\\webuddy.js（JSON 里还转义成 \\\\）
+      assert.match(h.command, /^node ".*bin[\\/\\\\]+webuddy\.js" hook run --agent claude-code$/);
     }
 
     // 说不写就不写：连 .claude 目录都不该冒出来
@@ -130,7 +131,7 @@ describe('webuddy hook install', () => {
     assert.equal(r.code, 0, r.stderr);
     const conf = path.join(home, '.codex', 'config.toml');
     const text = fs.readFileSync(conf, 'utf8');
-    assert.match(text, /^notify = \["node",".*bin\/webuddy\.js","hook","run","--agent","codex"\]$/m);
+    assert.match(text, /^notify = \["node",".*bin[\\/\\\\]+webuddy\.js","hook","run","--agent","codex"\]$/m);
 
     const again = await webuddy(['hook', 'install', '--agent', 'codex'], { cwd: proj, home });
     assert.match(again.stdout, /已经装过了/);
@@ -162,9 +163,21 @@ describe('webuddy hook status', () => {
 
   test('配置里的路径指到别处：说清它现在收不到，并给出怎么办', async () => {
     await webuddy(['hook', 'install'], { cwd: proj, home });
-    const raw = fs.readFileSync(settings(), 'utf8')
-      .replaceAll(CLI, '/搬走了/bin/webuddy.js');
-    fs.writeFileSync(settings(), raw);
+    /**
+     * 直接改 JSON，不做字符串替换。
+     * settings.json 里存的是 JSON 转义过的路径（Windows 上是 D:\\\\a\\\\…\\\\webuddy.js），
+     * 拿原始路径去 replaceAll 在 Windows 上一个字都换不掉，
+     * 于是这条测试会安安静静地什么都没验到。
+     */
+    const conf = JSON.parse(fs.readFileSync(settings(), 'utf8'));
+    for (const ev of Object.keys(conf.hooks || {})) {
+      for (const g of conf.hooks[ev]) {
+        for (const h of g.hooks || []) {
+          h.command = h.command.replace(/".*webuddy\.js"/, '"/搬走了/bin/webuddy.js"');
+        }
+      }
+    }
+    fs.writeFileSync(settings(), JSON.stringify(conf, null, 2));
 
     const r = await webuddy(['hook', 'status'], { cwd: proj, home });
     assert.equal(r.code, 0, r.stderr);

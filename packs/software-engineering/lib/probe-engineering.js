@@ -38,7 +38,16 @@ export function listFiles(dir, { limit = 6000 } = {}) {
       if (SKIP.has(e.name)) continue;
       const full = path.join(d, e.name);
       if (e.isDirectory()) walk(full, depth + 1);
-      else out.push(path.relative(dir, full));
+      /**
+       * 一律用正斜杠记路径。
+       *
+       * Windows 上 path.relative 给的是 tests\\auth.test.js，而对照表
+       * （artifacts/06-traceability.md）里人写的是 tests/auth.test.js ——
+       * 两边比不上，6.1 就会把 11 个明明在磁盘上的测试文件全报成"找不到"。
+       * 实测这条会让 Windows 上的 pack test 直接判包不合格。
+       * 产物文件里的路径永远是正斜杠写法，所以以它为准。
+       */
+      else out.push(path.relative(dir, full).split(path.sep).join('/'));
     }
   };
   walk(dir, 0);
