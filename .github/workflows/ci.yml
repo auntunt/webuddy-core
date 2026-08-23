@@ -1,0 +1,67 @@
+# CI：把本地那一趟检查原样跑在两个系统 × 两个 Node 版本上。
+#
+# 为什么要 matrix：本地只有 macOS。BSD 与 GNU 的命令行工具行为不一样——
+# 上一次踩的是 mktemp：`mktemp -t 名字` 在 macOS 上是前缀，在 GNU coreutils 上
+# 要求模板末尾至少 6 个 X，不补就直接报错。这种差异在一台机器上永远看不见。
+#
+# 步骤顺序照本地那一趟：先跑单元测试，再跑三个包的自测与体检，最后查内核纯净。
+# 顺序不是随意的——内核纯净那一步最快，但放最后是为了让"判错了"比"写脏了"先暴露。
+
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    strategy:
+      # 一个组合红了，别的照跑完：只知道"有一处红了"没法定位是系统差异还是版本差异。
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        node: [20, 22]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: setup-node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      # 参照实现只在复核 golden 时用得上（scripts/gen-golden-from-ref.mjs），
+      # 但布局要跟本地一致：.ref/webuddy-console 加一个 ref → .ref 的符号链接，
+      # 这样文档里所有 ref/webuddy-console/… 的路径原样可用。
+      # node --test 会走进 ref 底下的 .test.js 并全部失败，所以放在点开头的目录里
+      # （实测 node --test 跳过点开头目录，也不跟进符号链接指向的目录）。
+      - name: clone-ref
+        run: |
+          git clone --depth 1 https://github.com/auntunt/webuddy-console.git .ref/webuddy-console
+          ln -s .ref ref
+
+      - name: unit-tests
+        run: node --test
+
+      - name: pack-test
+        run: |
+          for p in software-engineering construction-safety financial-audit; do
+            node bin/webuddy.js pack test "packs/$p"
+          done
+
+      - name: pack-lint
+        run: |
+          for p in software-engineering construction-safety financial-audit; do
+            node bin/webuddy.js pack lint "packs/$p" --strict
+          done
+
+      # 内核里不许出现任何行业专有物。grep -c 数出来必须是 0；
+      # grep 找不到时退出码是 1，所以这里看的是计数，不是退出码。
+      - name: kernel-purity
+        run: |
+          hits=$(grep -rEc "八步|场景卡|scope-card|01-scope|TEST_HINT|SCHEMA_HINT|software" src/kernel/ | awk -F: '{s+=$2} END {print s+0}')
+          echo "内核里的行业专有物命中数：$hits"
+          test "$hits" -eq 0

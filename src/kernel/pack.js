@@ -460,8 +460,11 @@ export async function mountPack(projectDir, packRef) {
  * dot-<名字> 在拷过去的时候还原成 .<名字>：样板项目里有些判据要看隐藏目录
  * （比如"改动有没有存档"要看 .git），但版本管理工具不肯把这种目录当普通文件收进来，
  * 于是仓库里存成 dot-git，拷贝时改回来。包自己声明存哪些，内核只认这条命名约定。
+ *
+ * 导出是给 webuddy demo 用的（I4a）：演示项目就是把 fixtures/broken 整份搬出来，
+ * 搬的时候必须走同一份 dot- 还原规则 —— 两处各写一遍，早晚会漂。
  */
-function copyDir(src, dst) {
+export function copyDir(src, dst) {
   fs.mkdirSync(dst, { recursive: true });
   for (const e of fs.readdirSync(src, { withFileTypes: true })) {
     const s = path.join(src, e.name);
