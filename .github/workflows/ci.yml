@@ -64,9 +64,9 @@ jobs:
           node --test --test-reporter=tap 2>&1 | tee test-output.txt
           code=${PIPESTATUS[0]}
           if [ "$code" -ne 0 ]; then
-            # Actions 的日志要仓库 admin 才读得到，而 check 注解是公开可读的。
-            # 所以把每条失败的叶子测试连同 error/expected/actual 摘成注解 ——
-            # 套件级的 not ok 只会写一句 subtestsFailed，等于什么都没说。
+            # Actions 的日志要仓库 admin 才读得到（实测 403），而 check 注解公开可读。
+            # 汇成一条而不是一条失败一条注解：GitHub 每步最多显示 10 条注解，
+            # 分开发会被截断，而被截断的那几条恰恰可能是关键的。
             node -e '
               const fs = require("fs");
               const lines = fs.readFileSync("test-output.txt", "utf8").split(/\r?\n/);
@@ -74,17 +74,26 @@ jobs:
               for (let i = 0; i < lines.length; i++) {
                 const m = /^(\s*)not ok \d+ - (.+)$/.exec(lines[i]);
                 if (!m) continue;
-                let detail = "";
-                for (let j = i + 1; j < Math.min(i + 30, lines.length); j++) {
+                // 诊断块：--- 到 ... 之间。error 可能是 YAML 块标量（|-），
+                // 那种情况下真正的话在后面几行缩进里，只读 error: 这一行等于没读。
+                const block = [];
+                for (let j = i + 1; j < Math.min(i + 60, lines.length); j++) {
                   if (/^\s*\.\.\.\s*$/.test(lines[j])) break;
-                  const e = /^\s*(error|expected|actual|code|failureType):\s*(.+)$/.exec(lines[j]);
-                  if (e && e[1] !== "failureType") detail += " " + e[1] + "=" + e[2];
+                  block.push(lines[j]);
                 }
-                // 套件级那条只会写「N subtests failed」，说了等于没说，滤掉
-                if (/subtests? failed/.test(detail)) continue;
-                out.push((m[2] + detail).replace(/\s+/g, " ").slice(0, 400));
+                const text = block.join("\n");
+                if (/failureType:\s*.subtestsFailed./.test(text)) continue;
+                const keep = block
+                  .filter((l) => !/^\s*(duration_ms|location|failureType|stack|\*?at\s|---)/.test(l))
+                  .map((l) => l.trim())
+                  .filter(Boolean)
+                  .slice(0, 8);
+                out.push("✖ " + m[2] + "\n    " + keep.join("\n    "));
               }
-              for (const l of out.slice(0, 30)) console.log("::error::" + l);
+              const msg = out.slice(0, 40).join("\n\n").slice(0, 30000);
+              const esc = msg.replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A");
+              console.log("::error title=Windows 上失败的测试::" + esc);
+              console.log("（共 " + out.length + " 条失败）");
             '
           fi
           exit "$code"
