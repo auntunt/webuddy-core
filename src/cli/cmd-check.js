@@ -12,7 +12,7 @@
 import path from 'node:path';
 import process from 'node:process';
 import { loadPack, resolvePack } from '../kernel/pack.js';
-import { loadState, appendRecord } from '../kernel/state.js';
+import { loadState, appendRecord, isPackFixture } from '../kernel/state.js';
 import { evaluate } from '../kernel/evaluate.js';
 import { buildVerdict, VERDICT_SAY } from '../kernel/verdict.js';
 import { applyGlossary } from '../kernel/glossary.js';
@@ -106,26 +106,40 @@ export async function run(positionals, flags) {
   const evalResult = evaluate(projectDir, pack, { scope, round });
   const verdict = buildVerdict(evalResult, pack);
 
-  // 5. 落盘一条汇总（§2.4：records 归调用层，evaluate 不写盘）
-  try {
-    appendRecord(projectDir, {
-      kind: 'evaluate',
-      scope,
-      counts: verdict.counts,
-      verdict: verdict.verdict,
-      gateIds: {
-        fail: evalResult.gates.filter((v) => v.r === 'fail').map((v) => v.id),
-        ask: evalResult.gates.filter((v) => v.r === 'ask').map((v) => v.id),
-      },
-    });
-  } catch {
-    // 记不下留痕不该让人看不到结果。查的结论已经算出来了，照样打出来。
+  /**
+   * 5. 落盘一条汇总（§2.4：records 归调用层，evaluate 不写盘）
+   *
+   * 两种情况不留档（I1a）：
+   *   - 包自带的示例项目 —— 那是被 git 跟踪的素材，写进去仓库当场变脏；
+   *   - 显式说了 --no-record —— 只想看一眼，不想在这个项目里留痕。
+   * 结论照算照打，留不留档不进协议（--json 与 HTTP 的键集合都不变）。
+   */
+  const fixture = isPackFixture(projectDir);
+  const noRecordFlag = Boolean(flags['no-record']);
+  if (!fixture && !noRecordFlag) {
+    try {
+      appendRecord(projectDir, {
+        kind: 'evaluate',
+        scope,
+        counts: verdict.counts,
+        verdict: verdict.verdict,
+        gateIds: {
+          fail: evalResult.gates.filter((v) => v.r === 'fail').map((v) => v.id),
+          ask: evalResult.gates.filter((v) => v.r === 'ask').map((v) => v.id),
+        },
+      });
+    } catch {
+      // 记不下留痕不该让人看不到结果。查的结论已经算出来了，照样打出来。
+    }
   }
 
   if (json) {
     console.log(JSON.stringify(verdict, null, 2));
   } else {
-    renderHuman(verdict, evalResult, pack);
+    let note = null;
+    if (fixture) note = '（这是示例项目，本次结论没有留档）';
+    else if (noRecordFlag) note = '（这次只看不留档，项目里没有多出记录）';
+    renderHuman(verdict, evalResult, pack, note);
   }
 
   // 6. 退出码。--fail-on 缺省 blocked
@@ -148,7 +162,7 @@ export async function run(positionals, flags) {
  * 顺序回答三问（§2.5 铁律 1）：我到哪一步了 → 卡在哪 → 下一步做什么。
  * 倒挂放最前面，因为它是"顺序错了"，比任何单条没过都急。
  */
-function renderHuman(v, evalResult, pack) {
+function renderHuman(v, evalResult, pack, note = null) {
   const gl = pack.glossary || {};
   const g = (s) => applyGlossary(String(s ?? ''), gl);
   const out = [];
@@ -191,6 +205,7 @@ function renderHuman(v, evalResult, pack) {
   out.push('');
   out.push(C.dim(g(`${c.pass} 过 · ${c.failNow} 不过 · ${c.askNow} 待人答 · ${c.na} 不适用`)
     + ` —— 结论：${g(VERDICT_SAY[v.verdict] || v.verdict)}`));
+  if (note) out.push(C.dim(g(note)));
   out.push('');
 
   console.log(out.join('\n'));

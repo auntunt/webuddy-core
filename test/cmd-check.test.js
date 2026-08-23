@@ -157,3 +157,65 @@ describe('webuddy check（§5.4 协议 + §8.2 输出）', () => {
     assert.ok(!raw.includes('需求单'), '--json 被替换了，CI 就没法拿它对 diff');
   });
 });
+
+/**
+ * I1a：什么时候留档、什么时候不留。
+ *
+ * 留档这件事不进协议 —— --json 的键集合一个不变，只看 records.jsonl 长没长。
+ */
+describe('check 的留档开关（I1a）', () => {
+  let tmp;
+  let proj;
+
+  before(async () => {
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'webuddy-record-'));
+    proj = path.join(tmp, 'proj');
+    copyTree(GOOD, proj);
+    const r = await webuddy(['pack', 'mount', proj, SE], tmp);
+    assert.equal(r.code, 0, `挂包失败：${r.stdout}${r.stderr}`);
+  });
+
+  after(() => {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  });
+
+  const countRecords = () => {
+    const f = path.join(proj, '.webuddy', 'records.jsonl');
+    if (!fs.existsSync(f)) return 0;
+    return fs.readFileSync(f, 'utf8').split('\n').filter((l) => l.trim()).length;
+  };
+
+  test('普通项目照旧留档', async () => {
+    const before_ = countRecords();
+    await webuddy(['check'], proj);
+    assert.equal(countRecords(), before_ + 1, '普通项目查一次就该多一条留痕');
+  });
+
+  test('--no-record 查完一行都不多', async () => {
+    const before_ = countRecords();
+    const r = await webuddy(['check', '--no-record'], proj);
+    assert.equal(countRecords(), before_, '说了不留档就一行都不许多');
+    assert.match(r.stdout, /只看不留档/, '要在尾行说清这次没留档');
+  });
+
+  test('--no-record 不改变 --json 的键集合', async () => {
+    const a = JSON.parse((await webuddy(['check', '--json'], proj)).stdout);
+    const b = JSON.parse((await webuddy(['check', '--json', '--no-record'], proj)).stdout);
+    assert.deepEqual(Object.keys(b).sort(), Object.keys(a).sort(), '留不留档不进协议');
+  });
+
+  test('包自带的示例项目查两次都不留档，仓库不变脏', async () => {
+    const fixture = path.join(SE, 'fixtures', 'broken');
+    const recPath = path.join(fixture, '.webuddy', 'records.jsonl');
+    const before_ = fs.existsSync(recPath) ? fs.readFileSync(recPath, 'utf8') : null;
+
+    // cwd 必须是仓库根：resolvePack 找不到包就直接报错退出，根本走不到留档那一步
+    const repoRoot = path.resolve('.');
+    const r1 = await webuddy(['check', '--project', fixture], repoRoot);
+    await webuddy(['check', '--project', fixture], repoRoot);
+
+    const after_ = fs.existsSync(recPath) ? fs.readFileSync(recPath, 'utf8') : null;
+    assert.equal(after_, before_, 'fixtures 里的留痕文件一个字节都不许变');
+    assert.match(r1.stdout, /示例项目/, '要告诉人这次为什么没留档');
+  });
+});

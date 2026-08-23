@@ -22,7 +22,7 @@ import { fileURLToPath } from 'node:url';
 import { evaluate } from '../kernel/evaluate.js';
 import { buildVerdict } from '../kernel/verdict.js';
 import { loadPack, resolvePack as resolvePackDir } from '../kernel/pack.js';
-import { appendRecord, statePath, saveState, loadState } from '../kernel/state.js';
+import { appendRecord, statePath, saveState, loadState, isPackFixture } from '../kernel/state.js';
 import { roundStatus } from '../kernel/rounds.js';
 import BASE_GLOSSARY from '../kernel/glossary-base.json' with { type: 'json' };
 import {
@@ -317,20 +317,29 @@ export function createApiServer({ token, allowOrigin = null } = {}) {
         const evalResult = cachedEvaluate(projectDir, pack_(pr), { scope, round });
         const verdict = buildVerdict(evalResult, pack_(pr));
 
-        // records 落盘归调用层（§铁律：evaluate 是纯函数）
-        try {
-          appendRecord(projectDir, {
-            kind: 'evaluate',
-            scope,
-            counts: verdict.counts,
-            verdict: verdict.verdict,
-            gateIds: {
-              fail: evalResult.gates.filter((v) => v.r === 'fail').map((v) => v.id),
-              ask: evalResult.gates.filter((v) => v.r === 'ask').map((v) => v.id),
-            },
-          });
-        } catch {
-          // 记不下留痕不该让人看不到结论
+        /**
+         * records 落盘归调用层（§铁律：evaluate 是纯函数）。
+         *
+         * 两种情况不留档（I1a）：包自带的示例项目、请求体显式写了 "record": false。
+         * record 是可选键、缺省 true，只进请求不进响应 —— §5.4 冻结的是 Verdict
+         * 的键集合，这里一个响应字段都没加。
+         */
+        const wantRecord = body.record !== false && !isPackFixture(projectDir);
+        if (wantRecord) {
+          try {
+            appendRecord(projectDir, {
+              kind: 'evaluate',
+              scope,
+              counts: verdict.counts,
+              verdict: verdict.verdict,
+              gateIds: {
+                fail: evalResult.gates.filter((v) => v.r === 'fail').map((v) => v.id),
+                ask: evalResult.gates.filter((v) => v.r === 'ask').map((v) => v.id),
+              },
+            });
+          } catch {
+            // 记不下留痕不该让人看不到结论
+          }
         }
 
         sendJSON(res, 200, verdict);

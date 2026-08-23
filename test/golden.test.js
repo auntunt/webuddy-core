@@ -85,3 +85,23 @@ for (const c of CASES) {
     }
   });
 }
+
+/**
+ * I1b：头注说的话得是真的。
+ *
+ * 冻结之前这三个文件的头注写着"一次性脚本，产出后已删除"，而脚本一直在
+ * scripts/ 下躺着 —— 照着注释找的人会以为再也复核不了，于是没人复核，
+ * ref 漂了也没人知道。注释错了跟数据错了不一样，但同样会误导人。
+ */
+test('golden 头注指的生成脚本真的在，且说清了重跑的后果', () => {
+  const script = path.join(HERE, '..', 'scripts', 'gen-golden-from-ref.mjs');
+  assert.ok(fs.existsSync(script), '头注指着的 scripts/gen-golden-from-ref.mjs 不存在');
+
+  for (const c of CASES) {
+    const raw = fs.readFileSync(path.join(HERE, 'golden', `${c.name}.json`), 'utf8');
+    const header = raw.split('\n').filter((l) => l.trim().startsWith('//')).join('\n');
+    assert.match(header, /scripts\/gen-golden-from-ref\.mjs/, `${c.name} 头注里没写生成脚本`);
+    assert.doesNotMatch(header, /产出后已删除/, `${c.name} 头注还在说脚本已删除，可脚本就在 scripts\/ 下`);
+    assert.match(header, /重跑会覆盖/, `${c.name} 头注要说清重跑的后果`);
+  }
+});

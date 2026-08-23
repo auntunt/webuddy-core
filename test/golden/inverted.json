@@ -1,6 +1,6 @@
 // golden：由 ref/webuddy-console 的 json 命令产出，已冻结（§5.5 条件 4）。
 // 来源 fixture：test/fixtures/inverted
-// 生成命令：node scripts/gen-golden-from-ref.mjs（一次性脚本，产出后已删除）
+// 生成命令：node scripts/gen-golden-from-ref.mjs（脚本存 scripts/，重跑会覆盖，须经 DECISIONS 记录后才允许）
 //
 // 字段名映射（左 = 新内核 §5.2/§5.4，右 = ref json 输出）：
 //   counts.failNow      ← counts.failNow

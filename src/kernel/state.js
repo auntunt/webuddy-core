@@ -16,6 +16,36 @@ export function statePath(dir, ...segs) {
 }
 
 /**
+ * 这个目录是不是某个担架包自带的示例项目（I1a）。
+ *
+ * 判据：绝对路径里存在某个祖先目录名叫 fixtures，且这个 fixtures 的上级
+ * （包目录本身）或上上级里放着 pack.json —— 例如
+ * packs/software-engineering/fixtures/broken，其 fixtures 的上级
+ * packs/software-engineering 下有 pack.json。
+ *
+ * 为什么要认它：这些目录是被 git 跟踪的素材，对它们跑一次 check 就往
+ * fixtures/*​/.webuddy/records.jsonl 里追加一条巡检记录，仓库当场变脏；
+ * 而示例项目的存在意义是"每次查都得到同一个结论"，留痕对它没有价值。
+ *
+ * @param {string} dir - 项目目录（相对路径也认，内部会转绝对）
+ * @returns {boolean}
+ */
+export function isPackFixture(dir) {
+  let cur = path.resolve(dir);
+  while (true) {
+    const parent = path.dirname(cur);
+    if (parent === cur) return false;
+    if (path.basename(cur) === 'fixtures') {
+      // 上级 = 包目录（真实布局）；上上级 = 任务书字面写法。两处都认，认岔不会漏。
+      if (fs.existsSync(path.join(parent, 'pack.json'))) return true;
+      const grand = path.dirname(parent);
+      if (grand !== parent && fs.existsSync(path.join(grand, 'pack.json'))) return true;
+    }
+    cur = parent;
+  }
+}
+
+/**
  * 确保 .webuddy 目录存在
  */
 function ensureStateDir(dir) {
@@ -96,6 +126,38 @@ export function getInstanceVersion(dir) {
   }
 }
 
+/** 巡检快照最多留多少条（I1c）。到顶之后每写一条就丢掉最旧的一条。 */
+const EVALUATE_KEEP = 200;
+
+/**
+ * 把 records.jsonl 里最旧的 evaluate 记录削到只剩 keep-1 条，给新的那条腾位置。
+ * 其余 kind 一条不动、相对顺序不变。
+ *
+ * 原子性：先写同目录下的临时文件再 rename —— 同一文件系统内 rename 是原子的，
+ * 中途断电要么是旧文件要么是新文件，不会出现写了一半的 JSONL。
+ */
+function rotateEvaluates(recordsPath, keep) {
+  if (!fs.existsSync(recordsPath)) return;
+
+  const lines = fs.readFileSync(recordsPath, 'utf8').split('\n').filter((l) => l.trim());
+
+  const evalAt = [];
+  for (let i = 0; i < lines.length; i++) {
+    let kind = null;
+    try { kind = JSON.parse(lines[i]).kind; } catch { kind = null; }
+    // 读不动的行不算 evaluate，也不删 —— 看不懂的东西更不该被悄悄扔掉。
+    if (kind === 'evaluate') evalAt.push(i);
+  }
+  if (evalAt.length < keep) return;
+
+  const drop = new Set(evalAt.slice(0, evalAt.length - (keep - 1)));
+  const kept = lines.filter((_, i) => !drop.has(i));
+
+  const tmp = `${recordsPath}.rotating-${process.pid}`;
+  fs.writeFileSync(tmp, kept.length ? `${kept.join('\n')}\n` : '', 'utf8');
+  fs.renameSync(tmp, recordsPath);
+}
+
 /**
  * 追加一条记录到 records.jsonl
  * @param {string} dir - 项目目录
@@ -104,6 +166,13 @@ export function getInstanceVersion(dir) {
 export function appendRecord(dir, record) {
   ensureStateDir(dir);
   const recordsPath = statePath(dir, 'records.jsonl');
+
+  // 巡检快照（kind:'evaluate'）是每查一次追一条，长期用没有上限。
+  // 只有它可以滚动：别的 kind 记的是"谁在哪天确认了什么、改了什么",
+  // 那是产品本身，删一条就再也说不清当时发生过什么。
+  if (record && record.kind === 'evaluate') {
+    rotateEvaluates(recordsPath, EVALUATE_KEEP);
+  }
 
   const fullRecord = {
     ts: new Date().toISOString(),

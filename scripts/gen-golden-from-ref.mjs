@@ -1,11 +1,13 @@
 /**
- * 一次性脚本（§5.5 条件 2）：用 ref 自己的 json 命令产出 golden，用完即删。
+ * 用 ref 自己的 json 命令产出 golden（§5.5 条件 2）。脚本留在 scripts/ 下：
+ * golden 冻结之后它的用途从"生成"变成"复核"——重跑一次跟冻结的数据体 diff，
+ * 能抓出 ref 版本漂移。重跑会覆盖 test/golden/*.json，须经 DECISIONS 记录后才允许。
  *
  * 为什么必须由 ref 产出而不是新内核产出：golden 的作用是"新内核判得跟旧的一样"。
  * 拿新内核自己的输出当 golden，等于让考生自己出答案，测试永远是绿的。
  *
- * 用法：node scripts/gen-golden-from-ref.mjs
- * 产出：test/golden/{b-modeling,construction-project,inverted}.json
+ * 用法：node scripts/gen-golden-from-ref.mjs [输出目录]
+ * 产出：<输出目录>/{b-modeling,construction-project,inverted}.json，缺省 test/golden/
  */
 
 import fs from 'node:fs';
@@ -19,7 +21,10 @@ const SRC_DIRS = {
   'construction-project': 'test/fixtures/golden-src/construction-project',
   inverted: 'test/fixtures/inverted',
 };
-const OUT_DIR = path.join(ROOT, 'test/golden');
+// 复核时传一个临时目录进来，就不会碰到冻结的那三个文件。
+const OUT_DIR = process.argv[2]
+  ? path.resolve(process.argv[2])
+  : path.join(ROOT, 'test/golden');
 
 /**
  * 字段名映射（新内核 ← ref），写进 golden 头注，供以后对账。
@@ -73,12 +78,12 @@ for (const [name, dir] of Object.entries(SRC_DIRS)) {
   const header = [
     '// golden：由 ref/webuddy-console 的 json 命令产出，已冻结（§5.5 条件 4）。',
     `// 来源 fixture：${dir}`,
-    '// 生成命令：node scripts/gen-golden-from-ref.mjs（一次性脚本，产出后已删除）',
+    '// 生成命令：node scripts/gen-golden-from-ref.mjs（脚本存 scripts/，重跑会覆盖，须经 DECISIONS 记录后才允许）',
     '//',
     ...MAPPING.map((l) => `// ${l}`),
     '',
   ].join('\n');
   const body = JSON.stringify(picked, null, 2);
   fs.writeFileSync(path.join(OUT_DIR, `${name}.json`), `${header}${body}\n`);
-  console.log(`写入 test/golden/${name}.json`);
+  console.log(`写入 ${path.relative(ROOT, path.join(OUT_DIR, `${name}.json`))}`);
 }

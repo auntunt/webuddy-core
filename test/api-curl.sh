@@ -134,6 +134,24 @@ S=$($CURL -o /dev/null -w '%{http_code}' -X POST -H "$AUTH" -H "$JSON" \
 expect_status 404 "$S" "这条检查不在清单里"
 
 echo ""
+echo "=== I1a：留档开关（record 是可选键，不进响应）==="
+# 缓存 3 秒内会回旧结论且不再落痕，每次换个 scope 绕开它
+: > "$PROJ/.webuddy/records.jsonl"
+BEFORE=$(wc -l < "$PROJ/.webuddy/records.jsonl" | tr -d ' ')
+K1=$($CURL -X POST -H "$AUTH" -H "$JSON" \
+  -d "{\"project\":\"$PROJ\",\"pack\":\"packs/construction-safety\",\"scope\":\"all\"}" "$BASE/v1/check" \
+  | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(Object.keys(JSON.parse(s)).sort().join(",")))')
+AFTER1=$(wc -l < "$PROJ/.webuddy/records.jsonl" | tr -d ' ')
+if [ "$AFTER1" -eq $((BEFORE + 1)) ]; then ok "不写 record 键时照旧留档"; else bad "缺省应留档：$BEFORE → $AFTER1"; fi
+
+K2=$($CURL -X POST -H "$AUTH" -H "$JSON" \
+  -d "{\"project\":\"$PROJ\",\"pack\":\"packs/construction-safety\",\"scope\":\"stage:1\",\"record\":false}" "$BASE/v1/check" \
+  | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(Object.keys(JSON.parse(s)).sort().join(",")))')
+AFTER2=$(wc -l < "$PROJ/.webuddy/records.jsonl" | tr -d ' ')
+if [ "$AFTER2" -eq "$AFTER1" ]; then ok "record:false 一行都不多"; else bad "record:false 仍留了档：$AFTER1 → $AFTER2"; fi
+if [ "$K1" = "$K2" ]; then ok "响应键集合不受 record 影响（§5.4 未破冻）"; else bad "响应键集合变了：$K1 vs $K2"; fi
+
+echo ""
 echo "=== 未知接口 ==="
 S=$($CURL -o /dev/null -w '%{http_code}' -H "$AUTH" "$BASE/v1/nonexist")
 expect_status 404 "$S" "没有这个接口"

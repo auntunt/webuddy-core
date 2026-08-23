@@ -10,7 +10,8 @@ import {
   getInstanceVersion,
   appendRecord,
   readRecords,
-  getLatestHumanConfirm
+  getLatestHumanConfirm,
+  isPackFixture
 } from '../src/kernel/state.js';
 
 test('statePath 构建正确路径', () => {
@@ -134,5 +135,75 @@ test('saveState 原子写保护并发', () => {
     assert.strictEqual(tmpFiles.length, 0);
   } finally {
     fs.rmSync(tmpDir, { recursive: true });
+  }
+});
+
+/* ─────────────── I1a：包内示例项目的写保护 ─────────────── */
+
+test('isPackFixture 认出包自带的示例项目', () => {
+  assert.equal(isPackFixture('packs/software-engineering/fixtures/broken'), true);
+  assert.equal(isPackFixture('packs/software-engineering/fixtures/good'), true);
+  // 包目录自己不是示例项目
+  assert.equal(isPackFixture('packs/software-engineering'), false);
+});
+
+test('isPackFixture 对普通项目与临时目录一概说不是', () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wb-fixture-'));
+  try {
+    assert.equal(isPackFixture(tmpDir), false);
+    // 光有 fixtures 这个名字不算：上头得真有一个包
+    const fake = path.join(tmpDir, 'fixtures', 'broken');
+    fs.mkdirSync(fake, { recursive: true });
+    assert.equal(isPackFixture(fake), false);
+    // 补上 pack.json 才算
+    fs.writeFileSync(path.join(tmpDir, 'pack.json'), '{}');
+    assert.equal(isPackFixture(fake), true);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+/* ─────────────── I1c：巡检快照滚动，别的留痕永不删 ─────────────── */
+
+test('appendRecord 把 evaluate 削到 200 条，human-confirm 一条不少', () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wb-rotate-'));
+  try {
+    const recordsPath = statePath(tmpDir, 'records.jsonl');
+    fs.mkdirSync(path.dirname(recordsPath), { recursive: true });
+
+    const lines = [];
+    for (let i = 0; i < 250; i++) lines.push(JSON.stringify({ kind: 'evaluate', seq: i }));
+    // 三条人工确认插在最前面——最旧的位置，最容易被"丢最旧的"一起带走
+    for (let i = 0; i < 3; i++) lines.splice(i * 2, 0, JSON.stringify({ kind: 'human-confirm', gateId: `g${i}` }));
+    fs.writeFileSync(recordsPath, lines.join('\n') + '\n', 'utf8');
+
+    appendRecord(tmpDir, { kind: 'evaluate', seq: 999 });
+
+    const raw = fs.readFileSync(recordsPath, 'utf8').split('\n').filter((l) => l.trim());
+    const recs = raw.map((l) => JSON.parse(l)); // 读不动就在这儿抛：文件必须仍是合法 JSONL
+    const evals = recs.filter((r) => r.kind === 'evaluate');
+    const humans = recs.filter((r) => r.kind === 'human-confirm');
+
+    assert.equal(evals.length, 200, '巡检快照应恰好 200 条');
+    assert.equal(humans.length, 3, '人工确认一条都不许丢');
+    assert.equal(evals[evals.length - 1].seq, 999, '最新的那条要在');
+    assert.equal(evals[0].seq, 51, '丢的应该是最旧的（0..50 共 51 条）');
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('appendRecord 不到 200 条时不动文件，别的 kind 也从不触发滚动', () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wb-rotate2-'));
+  try {
+    for (let i = 0; i < 30; i++) appendRecord(tmpDir, { kind: 'evaluate', seq: i });
+    assert.equal(readRecords(tmpDir, { kind: 'evaluate' }).length, 30);
+
+    // 300 条 human-confirm 照样一条不删
+    for (let i = 0; i < 300; i++) appendRecord(tmpDir, { kind: 'human-confirm', gateId: String(i) });
+    assert.equal(readRecords(tmpDir, { kind: 'human-confirm' }).length, 300);
+    assert.equal(readRecords(tmpDir, { kind: 'evaluate' }).length, 30);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 });
