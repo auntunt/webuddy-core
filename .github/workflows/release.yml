@@ -61,18 +61,35 @@ jobs:
         shell: bash
         run: |
           set +e
-          node --test 2>&1 | tee test-output.txt
+          # 固定用 TAP 报告器：默认报告器在非终端下的格式随版本变，
+          # 而下面要按行解析它，格式一变就什么都摘不出来。
+          node --test --test-reporter=tap 2>&1 | tee test-output.txt
           code=${PIPESTATUS[0]}
           if [ "$code" -ne 0 ]; then
-            grep -E "^(not ok|[[:space:]]*✖|AssertionError|Error:|[[:space:]]+at )" test-output.txt \
-              | head -40 \
-              | while IFS= read -r line; do echo "::error::${line}"; done
+            # Actions 的日志要仓库 admin 才读得到，而 check 注解是公开可读的。
+            # 所以把每条失败的叶子测试连同 error/expected/actual 摘成注解 ——
+            # 套件级的 not ok 只会写一句 subtestsFailed，等于什么都没说。
+            node -e '
+              const fs = require("fs");
+              const lines = fs.readFileSync("test-output.txt", "utf8").split(/\r?\n/);
+              const out = [];
+              for (let i = 0; i < lines.length; i++) {
+                const m = /^(\s*)not ok \d+ - (.+)$/.exec(lines[i]);
+                if (!m) continue;
+                let detail = "";
+                for (let j = i + 1; j < Math.min(i + 30, lines.length); j++) {
+                  if (/^\s*\.\.\.\s*$/.test(lines[j])) break;
+                  const e = /^\s*(error|expected|actual|code|failureType):\s*(.+)$/.exec(lines[j]);
+                  if (e && e[1] !== "failureType") detail += " " + e[1] + "=" + e[2];
+                }
+                // 套件级那条只会写「N subtests failed」，说了等于没说，滤掉
+                if (/subtests? failed/.test(detail)) continue;
+                out.push((m[2] + detail).replace(/\s+/g, " ").slice(0, 400));
+              }
+              for (const l of out.slice(0, 30)) console.log("::error::" + l);
+            '
           fi
           exit "$code"
-
-      # 只生成载荷与配置。blob 必须由「即将被注入的那个 node」自己生成 ——
-      # SEA 的 blob 跟 Node 版本是绑死的，拿别的版本生成的 blob 注进去，
-      # 程序一起来就 FATAL ERROR: v8::ToLocalChecked Empty MaybeLocal（本机实测过）。
       - name: build-payload
         run: node scripts/build-sea.mjs sea-out
 

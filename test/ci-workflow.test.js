@@ -54,7 +54,8 @@ describe('.github/workflows/ci.yml（§I5）', () => {
   test('每一步跑的命令，本地都能原样跑', () => {
     assert.match(code, /git clone --depth 1 https:\/\/github\.com\/auntunt\/webuddy-console\.git \.ref\/webuddy-console/);
     assert.match(code, /ln -s \.ref ref/);
-    assert.match(code, /node --test 2>&1 \| tee test-output\.txt/);
+    // 固定 TAP 报告器：默认报告器的非终端格式随版本变，而注解摘要按行解析它
+    assert.match(code, /node --test --test-reporter=tap 2>&1 \| tee test-output\.txt/);
     assert.match(code, /pack test "packs\/\$p"/);
     assert.match(code, /pack lint "packs\/\$p" --strict/);
     // 三个包都得跑到，不能只跑软件工程那一个
