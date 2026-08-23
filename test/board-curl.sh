@@ -9,9 +9,9 @@ cd "$ROOT"
 PORT=${PORT:-9877}
 BASE="http://127.0.0.1:${PORT}"
 TOKEN="board123"
-LOG="$(mktemp -t webuddy-board-log)"
-PROJ="$(mktemp -d -t webuddy-board-proj)"
-TMP="$(mktemp -d -t webuddy-board-tmp)"
+LOG="$(mktemp -t webuddy-board-log.XXXXXX)"
+PROJ="$(mktemp -d -t webuddy-board-proj.XXXXXX)"
+TMP="$(mktemp -d -t webuddy-board-tmp.XXXXXX)"
 SERVER_PID=""
 FAILED=0
 

@@ -17,6 +17,8 @@
 - 骨架变更只有 applyProposal 一条路径;human 确认随 instanceVersion 失效。
 - evaluate 是纯函数;records 落盘在调用层(cmd-check / api)。
 - .webuddy/ 路径只经 state.js 拼。
+- bin/webuddy.js 于 GOAL-2 I0 注册 hook/answer/demo(并一次性补齐 --no-record/--agent/--dry-run/--set
+  四个开关)后再次冻结;后续任务只填各自 src/cli/cmd-*.js。
 
 ## 验证纪律
 - 同一测试失败盲目重试 ≤2 次,之后读代码找根因。

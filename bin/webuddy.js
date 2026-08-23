@@ -53,7 +53,10 @@ const COMMANDS = {
   evidence: { module: 'cmd-evidence', subcommands: ['add', 'list'] },
   recompile: { module: 'cmd-recompile', subcommands: ['propose', 'apply', 'list'] },
   serve: { module: 'cmd-serve', subcommands: [] },
-  open: { module: 'cmd-open', subcommands: [] }
+  open: { module: 'cmd-open', subcommands: [] },
+  hook: { module: 'cmd-hook', subcommands: ['install', 'status', 'run'] },
+  answer: { module: 'cmd-answer', subcommands: [] },
+  demo: { module: 'cmd-demo', subcommands: [] }
 };
 
 // Handle --version / -v before argument parsing
@@ -80,6 +83,9 @@ if (args.length === 0) {
   pack               担架包管理(lint、test、mount)
   recompile          骨架重编译(propose、apply、list)
   open               打开看板
+  hook               装/查/跑改动挂钩(install、status、run)
+  answer             回答看板上的待确认问题
+  demo               生成一个练手用的演示项目
 
 使用 --version 或 -v 查看版本
 使用 --help 查看某个命令的详细说明`);
@@ -141,7 +147,14 @@ try {
     'content-file': { type: 'string' },
     pack: { type: 'string' },
     desc: { type: 'string' },
-    by: { type: 'string' }
+    by: { type: 'string' },
+    // GOAL-2 一次性补齐：后续任务只填各自 cmd 文件，不再动 bin。
+    // parseArgs 是 strict 的，开关没在这里登记就报"未知选项"，
+    // 所以哪怕实现还在存根阶段，开关也得先在这儿占好位置。
+    'no-record': { type: 'boolean' },   // I1a：只看不留档
+    agent: { type: 'string' },          // I3a：hook install --agent claude|codex
+    'dry-run': { type: 'boolean' },     // I3a：只打印不落盘
+    set: { type: 'string', multiple: true } // I3b：answer --set 键=值，可重复
   };
 
   config.options = commonFlags;

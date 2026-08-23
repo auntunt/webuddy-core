@@ -9,8 +9,8 @@ cd "$ROOT"
 PORT=${PORT:-9876}
 BASE="http://127.0.0.1:$PORT"
 TOKEN="test123"
-LOG="$(mktemp -t webuddy-api-log)"
-PROJ="$(mktemp -d -t webuddy-api-proj)"
+LOG="$(mktemp -t webuddy-api-log.XXXXXX)"
+PROJ="$(mktemp -d -t webuddy-api-proj.XXXXXX)"
 SERVER_PID=""
 FAILED=0
 
