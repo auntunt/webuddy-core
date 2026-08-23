@@ -18,6 +18,8 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { compileSkill } from './skill-compile.js';
 import { parseProbe } from './probe-dsl.js';
+// 换行统一在读进来的第一时间做，别让 CRLF 流进任何一个 split('\n')
+import { normalizeNewlines } from './artifact-io.js';
 import { statePath, loadState, saveState } from './state.js';
 import { evaluate } from './evaluate.js';
 
@@ -60,7 +62,7 @@ export async function loadPack(packDir) {
     return { ok: false, errors: ['找不到 SKILL.md'] };
   }
 
-  const skillText = fs.readFileSync(skillPath, 'utf8');
+  const skillText = normalizeNewlines(fs.readFileSync(skillPath, 'utf8'));
   const { stages, gates, errors: skillErrors } = compileSkill(skillText);
   errors.push(...skillErrors);
 
@@ -83,7 +85,7 @@ export async function loadPack(packDir) {
   const probesPath = path.join(packDir, 'probes.md');
   const MISS_ALLOWED = ['fix', 'ask'];
   if (fs.existsSync(probesPath)) {
-    const probesText = fs.readFileSync(probesPath, 'utf8');
+    const probesText = normalizeNewlines(fs.readFileSync(probesPath, 'utf8'));
     const probesSections = parseSections(probesText);
     for (const [gateId, body] of Object.entries(probesSections)) {
       const exprLines = [];
@@ -117,7 +119,7 @@ export async function loadPack(packDir) {
   const prompts = new Map();
   const promptsPath = path.join(packDir, 'prompts.md');
   if (fs.existsSync(promptsPath)) {
-    const promptsText = fs.readFileSync(promptsPath, 'utf8');
+    const promptsText = normalizeNewlines(fs.readFileSync(promptsPath, 'utf8'));
     const promptsSections = parseSections(promptsText);
     for (const [gateId, content] of Object.entries(promptsSections)) {
       const prompt = parsePromptSection(gateId, content);

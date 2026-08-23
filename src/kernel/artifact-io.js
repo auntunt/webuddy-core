@@ -6,6 +6,25 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 
 /**
+ * 把换行统一成 \n。
+ *
+ * 为什么必须在读进来的第一时间就抹平：本仓库所有解析器都是 split('\n') 起手
+ * （小节、表格、列表、门禁表、提问组），CRLF 会给每一行尾巴上留一个 \r，
+ * 于是 /^###\s+(\d+\.\d+)$/ 这类带 $ 的正则全部失配。
+ *
+ * 这不是"照顾 Windows 开发机"的小事——目标用户里就有人用记事本写
+ * artifacts 下的产物，记事本存出来的就是 CRLF。不抹平的话，
+ * 同一份内容在他机器上判不通过、在别人机器上判通过，而工具说不出为什么。
+ * 实测：把包与项目整份转成 CRLF 之后 loadPack 直接失败，报「环节数少于 3 个」。
+ *
+ * @param {string} text
+ * @returns {string}
+ */
+export function normalizeNewlines(text) {
+  return typeof text === 'string' ? text.replace(/\r\n/g, '\n') : text;
+}
+
+/**
  * 读取产物文件，相对于项目根目录
  * @param {string} projectDir 项目根目录
  * @param {string} relPath 相对路径
@@ -16,7 +35,7 @@ export function readArtifact(projectDir, relPath) {
     const fullPath = path.join(projectDir, relPath);
     const st = fs.statSync(fullPath);
     if (!st.isFile()) return null;
-    return fs.readFileSync(fullPath, 'utf8');
+    return normalizeNewlines(fs.readFileSync(fullPath, 'utf8'));
   } catch {
     return null;
   }

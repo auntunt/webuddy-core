@@ -253,3 +253,47 @@ test('loadPack 对象深冻结', async () => {
   assert.ok(Object.isFrozen(result.pack.probes));
   assert.ok(Object.isFrozen(result.pack.prompts));
 });
+
+/**
+ * 换行形式不该改变判定（Windows 上 git 默认检出 CRLF，记事本存出来的也是 CRLF）。
+ *
+ * 这条是 v0.1.0 发版时 Windows 两格红了才补的：当时 loadPack 在 CRLF 下
+ * 直接失败，报「环节数少于 3 个」——门禁表一条都没解析出来。
+ */
+test('CRLF 的包和项目，判定跟 LF 逐字段一样', async () => {
+  const { evaluate } = await import('../src/kernel/evaluate.js');
+  const SE = path.resolve('packs/software-engineering');
+  const SRC = path.resolve('test/fixtures/golden-src/b-modeling');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'wb-crlf-'));
+
+  /** 整份拷过去，顺手把文本文件转成 CRLF */
+  const toCrlf = (src, dst) => {
+    fs.mkdirSync(dst, { recursive: true });
+    for (const e of fs.readdirSync(src, { withFileTypes: true })) {
+      const s = path.join(src, e.name);
+      const d = path.join(dst, e.name);
+      if (e.isDirectory()) toCrlf(s, d);
+      else if (/\.(md|json|jsonl|js)$/.test(e.name)) {
+        fs.writeFileSync(d, fs.readFileSync(s, 'utf8').replace(/\r?\n/g, '\r\n'));
+      } else if (e.isFile()) fs.copyFileSync(s, d);
+    }
+  };
+
+  try {
+    toCrlf(SE, path.join(tmp, 'pack'));
+    toCrlf(SRC, path.join(tmp, 'proj'));
+
+    const lf = await loadPack(SE);
+    const crlf = await loadPack(path.join(tmp, 'pack'));
+    assert.strictEqual(crlf.ok, true, `CRLF 的包没加载起来：${(crlf.errors || []).join('；')}`);
+    assert.strictEqual(crlf.pack.gates.length, lf.pack.gates.length, '门禁条数对不上');
+    assert.strictEqual(crlf.pack.probes.size, lf.pack.probes.size, 'DSL 探测块数对不上');
+
+    const a = evaluate(SRC, lf.pack, { mode: 'mvp' });
+    const b = evaluate(path.join(tmp, 'proj'), crlf.pack, { mode: 'mvp' });
+    assert.deepStrictEqual(b.counts, a.counts, '同一份内容，换行不同就判出不同结果');
+    assert.strictEqual(b.currentStage, a.currentStage);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});

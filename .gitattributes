@@ -1,0 +1,19 @@
+# 换行一律用 LF 检出，不管在什么系统上。
+#
+# 不设的话 Windows 上 git 默认 core.autocrlf=true，检出来的 .md 全是 CRLF——
+# 而本仓库的解析器（门禁表、小节、表格、提问组）都是 split('\n') 起手，
+# 每行尾巴多一个 \r 会让带 $ 的正则全部失配。实测后果是 loadPack 直接失败，
+# 报「环节数少于 3 个」，测试成片红（v0.1.0 发版时 Windows 那两格就是这么红的）。
+#
+# 代码层面也已经在读取入口抹平了 CRLF（src/kernel/artifact-io.js 的
+# normalizeNewlines）——那是给用户的产物文件用的，用记事本写出来的就是 CRLF。
+# 这份文件管的是仓库自己的素材，两道各管一头。
+* text=auto eol=lf
+
+# fixtures 里的 .webuddy/records.jsonl 与 state.json 是判定基线，同样要 LF
+*.jsonl text eol=lf
+*.json  text eol=lf
+*.md    text eol=lf
+*.js    text eol=lf
+*.mjs   text eol=lf
+*.sh    text eol=lf
