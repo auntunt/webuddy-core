@@ -1,8 +1,13 @@
 # CI：把本地那一趟检查原样跑在两个系统 × 两个 Node 版本上。
 #
-# 为什么要 matrix：本地只有 macOS。BSD 与 GNU 的命令行工具行为不一样——
-# 上一次踩的是 mktemp：`mktemp -t 名字` 在 macOS 上是前缀，在 GNU coreutils 上
-# 要求模板末尾至少 6 个 X，不补就直接报错。这种差异在一台机器上永远看不见。
+# 为什么要 matrix：本地只有 macOS。各家的命令行工具行为不一样——
+# 踩过两次：① mktemp，`mktemp -t 名字` 在 macOS 上是前缀，在 GNU coreutils 上
+# 要求模板末尾至少 6 个 X，不补就直接报错；② Windows 上 os.homedir() 认的是
+# %USERPROFILE% 而不是 $HOME，只设 HOME 的测试会污染真实用户目录。
+# 这类差异在一台机器上永远看不见，v0.1.0 发版时 Windows 那两格就是这么红的。
+#
+# 每个多行 run 都写死 shell: bash —— Windows runner 的默认 shell 是 pwsh，
+# 不写的话 `for p in …; do` 这种写法当场语法错。
 #
 # 步骤顺序照本地那一趟：先跑单元测试，再跑三个包的自测与体检，最后查内核纯净。
 # 顺序不是随意的——内核纯净那一步最快，但放最后是为了让"判错了"比"写脏了"先暴露。
@@ -21,7 +26,7 @@ jobs:
       # 一个组合红了，别的照跑完：只知道"有一处红了"没法定位是系统差异还是版本差异。
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
         node: [20, 22]
     runs-on: ${{ matrix.os }}
     steps:
@@ -39,20 +44,26 @@ jobs:
       # node --test 会走进 ref 底下的 .test.js 并全部失败，所以放在点开头的目录里
       # （实测 node --test 跳过点开头目录，也不跟进符号链接指向的目录）。
       - name: clone-ref
+        shell: bash
         run: |
           git clone --depth 1 https://github.com/auntunt/webuddy-console.git .ref/webuddy-console
-          ln -s .ref ref
+          # Windows 的 MSYS 上 ln -s 默认是拷贝、还可能直接失败。
+          # ref/ 只有 scripts/gen-golden-from-ref.mjs 用得上，测试一趟都不碰它，
+          # 所以这一步失败不算数（golden 用的是 test/fixtures/ 下自带的素材）。
+          ln -s .ref ref || echo "建不了符号链接（Windows 常见），跳过——测试不依赖 ref/"
 
       - name: unit-tests
         run: node --test
 
       - name: pack-test
+        shell: bash
         run: |
           for p in software-engineering construction-safety financial-audit; do
             node bin/webuddy.js pack test "packs/$p"
           done
 
       - name: pack-lint
+        shell: bash
         run: |
           for p in software-engineering construction-safety financial-audit; do
             node bin/webuddy.js pack lint "packs/$p" --strict
@@ -61,6 +72,7 @@ jobs:
       # 内核里不许出现任何行业专有物。grep -c 数出来必须是 0；
       # grep 找不到时退出码是 1，所以这里看的是计数，不是退出码。
       - name: kernel-purity
+        shell: bash
         run: |
           hits=$(grep -rEc "八步|场景卡|scope-card|01-scope|TEST_HINT|SCHEMA_HINT|software" src/kernel/ | awk -F: '{s+=$2} END {print s+0}')
           echo "内核里的行业专有物命中数：$hits"

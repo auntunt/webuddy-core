@@ -1,10 +1,13 @@
 /**
  * demo 命令端到端（I4a）。
  *
- * 家目录用 HOME 环境变量顶掉：注册表在 ~/.webuddy/projects.json，
+ * 家目录用环境变量顶掉：注册表在 ~/.webuddy/projects.json，
  * 演示项目缺省也落在家目录下，不顶掉的话跑一次测试就往开发者自己的
  * 看板里塞一个项目、往家目录里扔一个文件夹。os.homedir() 在 POSIX 上
  * 读的就是 $HOME，所以子进程 spawn 之前把它换掉就够，不用改内核。
+ * Windows 上 os.homedir() 认的是 %USERPROFILE% 而不是 $HOME，两个都得设：
+ * registry.js 走 os.homedir()，而 pack.js:414 走 `HOME || USERPROFILE`，
+ * 只设一个的话这两处会指到不同地方，测试要么污染真实用户目录、要么当场找不到文件。
  */
 
 import { test, describe, before, after } from 'node:test';
@@ -25,7 +28,7 @@ function webuddy(args, { timeout = 20000 } = {}) {
   return new Promise((resolve) => {
     const child = execFile(
       process.execPath, [CLI, ...args],
-      { cwd: REPO, env: { ...process.env, HOME: home }, maxBuffer: 20e6, timeout, killSignal: 'SIGKILL' },
+      { cwd: REPO, env: { ...process.env, HOME: home, USERPROFILE: home }, maxBuffer: 20e6, timeout, killSignal: 'SIGKILL' },
       (err, stdout, stderr) => resolve({ code: err?.code ?? 0, killed: Boolean(err?.killed), stdout, stderr })
     );
     // 看板一起来就够了，不用等它自己退
@@ -137,7 +140,7 @@ describe('webuddy demo（§I4a）', () => {
     const token = 'demo-token';
     // 只连 127.0.0.1（铁律）。服务用同一个 HOME，才读得到刚写进去的那份注册表。
     const srv = spawn(process.execPath, [CLI, 'serve', '--port', String(port), '--token', token], {
-      cwd: REPO, env: { ...process.env, HOME: home }, stdio: 'ignore',
+      cwd: REPO, env: { ...process.env, HOME: home, USERPROFILE: home }, stdio: 'ignore',
     });
     try {
       let body = null;

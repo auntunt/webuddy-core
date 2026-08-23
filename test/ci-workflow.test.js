@@ -25,9 +25,11 @@ describe('.github/workflows/ci.yml（§I5）', () => {
     assert.match(code, /^name:\s*CI$/m);
   });
 
-  test('两个系统 × 两个 Node 版本的 matrix 都在', () => {
+  test('三个系统 × 两个 Node 版本的 matrix 都在', () => {
     assert.match(code, /^\s*matrix:\s*$/m, '没有 matrix');
-    assert.match(code, /^\s*os:\s*\[ubuntu-latest,\s*macos-latest\]\s*$/m);
+    // Windows 是 v0.1.0 发版红了之后补进来的：只在 macOS 上跑，
+    // 看不见「os.homedir() 在 Windows 上读 USERPROFILE」这类差异
+    assert.match(code, /^\s*os:\s*\[ubuntu-latest,\s*macos-latest,\s*windows-latest\]\s*$/m);
     assert.match(code, /^\s*node:\s*\[20,\s*22\]\s*$/m);
     assert.match(code, /runs-on:\s*\$\{\{\s*matrix\.os\s*\}\}/);
     assert.match(code, /node-version:\s*\$\{\{\s*matrix\.node\s*\}\}/);
@@ -38,6 +40,15 @@ describe('.github/workflows/ci.yml（§I5）', () => {
     assert.deepEqual(steps, [
       'checkout', 'setup-node', 'clone-ref', 'unit-tests', 'pack-test', 'pack-lint', 'kernel-purity',
     ], `步骤对不上：${steps.join(' → ')}`);
+  });
+
+  test('多行 run 都写死了 shell: bash（Windows 默认是 pwsh）', () => {
+    // 不写的话 `for p in …; do` 这种写法在 Windows 那格当场语法错
+    const multiline = [...code.matchAll(/-\s*name:\s*(\S+)[\s\S]*?run:\s*\|/g)];
+    for (const m of multiline) {
+      const step = m[0];
+      assert.match(step, /shell:\s*bash/, `步骤 ${m[1]} 的多行 run 没写 shell: bash`);
+    }
   });
 
   test('每一步跑的命令，本地都能原样跑', () => {

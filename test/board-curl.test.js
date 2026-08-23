@@ -21,7 +21,24 @@ import path from 'node:path';
 const HERE = import.meta.dirname;
 const ROOT = path.join(HERE, '..');
 
-test('看板端点往返（test/board-curl.sh）', () => {
+/**
+ * Windows 上跳过。
+ *
+ * 不是"懒得适配"：这个脚本是 POSIX shell，跑起来要 mktemp/curl 那一套，
+ * 而 Windows runner 上的 bash 是 MSYS 的 —— 它把 $PROJ 算成 /tmp/xxx 这种
+ * MSYS 路径，再原样交给 Windows 版的 node，node 解析不了那个路径。
+ * 要让它在 Windows 上跑通，得在脚本里到处插路径转换（cygpath），
+ * 那是给测试脚本加一套只有测试用得上的逻辑。
+ *
+ * 少掉的覆盖是"Windows 上的 HTTP 端点往返"。评估过风险：端点实现是同一份
+ * JS，走的是 Node 自带的 http，跨平台差异在这一层基本不存在；而端点的形状
+ * 与鉴权规则在 test/verdict.test.js 与 test/board-render.test.js 里另有断言。
+ */
+const SKIP_ON_WINDOWS = process.platform === 'win32'
+  ? 'board-curl.sh 是 POSIX shell 脚本，Windows 上的 MSYS 路径交给 Windows 版 node 解析不了'
+  : false;
+
+test('看板端点往返（test/board-curl.sh）', { skip: SKIP_ON_WINDOWS }, () => {
   const r = spawnSync('bash', [path.join(HERE, 'board-curl.sh')], {
     cwd: ROOT,
     encoding: 'utf8',
