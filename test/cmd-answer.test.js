@@ -190,6 +190,55 @@ describe('webuddy answer（§I3b）', () => {
     assert.ok(out.includes('approval') && out.includes('approver'), out);
   });
 
+  /**
+   * 老账兼容（T2）。
+   *
+   * 2026-08-23 之前 POST /v1/answers 写的是扁平的 "条目号.键"，
+   * 那批答案至今没人读得到。这两条验的是：读得到了，而且一次写入之后
+   * 文件里只剩嵌套那一种形状。
+   */
+  test('预置的老扁平键读得到：check 不再问那几个已经答过的键', async () => {
+    const proj = await newProj();
+    const stPath = path.join(proj, '.webuddy/state.json');
+    const st = JSON.parse(fs.readFileSync(stPath, 'utf8'));
+    // 手写一份老形状，模拟"以前从看板答过"
+    st.answers = { '1.2.approval': 'SP-老', '1.2.approver': '老王' };
+    fs.writeFileSync(stPath, JSON.stringify(st, null, 2), 'utf8');
+
+    assert.deepEqual(await pendingKeys(proj, '1.2'), [], '老账里答过的键还在问，兼容读没生效');
+  });
+
+  test('一次写入之后，文件里只剩嵌套形状，扁平键自然消失', async () => {
+    const proj = await newProj();
+    const stPath = path.join(proj, '.webuddy/state.json');
+    const st = JSON.parse(fs.readFileSync(stPath, 'utf8'));
+    st.answers = { '1.2.approval': 'SP-老', '2.2.done': '早就做了' };
+    fs.writeFileSync(stPath, JSON.stringify(st, null, 2), 'utf8');
+
+    const r = await webuddy(['answer', '1.2', '--project', proj, '--set', 'approver=张三'], tmp);
+    assert.equal(r.code, 0, `${r.stdout}${r.stderr}`);
+
+    const after = readState(proj);
+    const flat = Object.keys(after.answers).filter((k) => /^\d+\.\d+\./.test(k));
+    assert.deepEqual(flat, [], `文件里还留着扁平键：${flat.join('、')}`);
+    // 老答案没丢，新答案也进来了
+    assert.deepEqual(after.answers['1.2'], { approval: 'SP-老', approver: '张三' });
+    // 没碰过的那一组也一起折成了嵌套（saveState 是整个 answers 覆盖写）
+    assert.deepEqual(after.answers['2.2'], { done: '早就做了' });
+  });
+
+  test('冲突时嵌套赢：嵌套是事实源，扁平只是老账', async () => {
+    const proj = await newProj();
+    const stPath = path.join(proj, '.webuddy/state.json');
+    const st = JSON.parse(fs.readFileSync(stPath, 'utf8'));
+    st.answers = { '1.2': { approval: '新的' }, '1.2.approval': '老的' };
+    fs.writeFileSync(stPath, JSON.stringify(st, null, 2), 'utf8');
+
+    const r = await webuddy(['answer', '1.2', '--project', proj, '--set', 'approver=李四'], tmp);
+    assert.equal(r.code, 0, `${r.stdout}${r.stderr}`);
+    assert.equal(readState(proj).answers['1.2'].approval, '新的');
+  });
+
   test('--help 能用，打的是用法，不是「尚未实现」', async () => {
     const r = await webuddy(['answer', '--help'], tmp);
     assert.equal(r.code, 0, `${r.stdout}${r.stderr}`);

@@ -243,18 +243,59 @@ expect_status 422 "$S" "不是文件上传的请求被拒"
 echo
 echo "=== 6. 回答存得下 ==="
 
+# 某一条问题现在还剩哪几个键没答（读的是 /v1/check 的 humanPending）
+pending_keys() {
+  $CURL -X POST -H "$AUTH" -H 'Content-Type: application/json' \
+    -d "{\"project\":\"${PROJ}\",\"pack\":\"packs/construction-safety\",\"scope\":\"$2\"}" \
+    "${BASE}/v1/check" \
+  | node -e '
+      let s = "";
+      process.stdin.on("data", (d) => { s += d; }).on("end", () => {
+        const v = JSON.parse(s);
+        const item = (v.humanPending || []).find((h) => h.id === process.argv[1]);
+        console.log((item ? item.asks || [] : []).map((a) => a.key).join(","));
+      });' "$1"
+}
+
+# 前提：1.2 本来就该有两个待答的键。前提不成立的话下面那条断言是空转的。
+BEFORE_12="$(pending_keys 1.2 all)"
+if [ "$BEFORE_12" = "approval,approver" ]; then
+  ok "答之前 1.2 有两个键等着（${BEFORE_12}）"
+else
+  bad "前提不成立：1.2 本该有 approval,approver 两个待答键，实际是「${BEFORE_12}」"
+fi
+
 ANS="$($CURL -X POST -H "$AUTH" -H 'Content-Type: application/json' \
-  -d "{\"project\":\"${PROJ}\",\"promptId\":\"3.5\",\"answers\":{\"done\":\"装齐了\",\"evidence\":\"照片已传\"}}" \
+  -d "{\"project\":\"${PROJ}\",\"promptId\":\"1.2\",\"answers\":{\"approval\":\"SP-2026-007\",\"approver\":\"张三\"}}" \
   "${BASE}/v1/answers")"
 # 响应是缩进过的 JSON，别按 "ok":true 这种紧挨着的写法去匹配
 case "$ANS" in
   *'"ok"'*true*) ok "POST /v1/answers 存下了" ;;
   *) bad "存回答失败：${ANS}" ;;
 esac
-case "$(cat "${PROJ}/.webuddy/state.json")" in
-  *"3.5.done"*) ok "回答按「条目号.键」存，不同条目的同名键不会互相顶掉" ;;
-  *) bad "回答没按条目号存：$(cat "${PROJ}/.webuddy/state.json")" ;;
+
+# 形状：嵌套的 answers[条目号][键]（T1 定的唯一事实源）。
+# 曾经写的是扁平的 "1.2.approval"，形状对了但 evaluate 读不到。
+SHAPE="$(node -e '
+  const fs = require("fs");
+  const st = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+  const a = st.answers || {};
+  const nested = a["1.2"] && typeof a["1.2"] === "object" ? Object.keys(a["1.2"]).sort().join(",") : "";
+  const flat = Object.keys(a).filter((k) => k.indexOf("1.2.") === 0).join(",");
+  console.log(`${nested}|${flat}`);' "${PROJ}/.webuddy/state.json")"
+case "$SHAPE" in
+  "approval,approver|") ok "回答按条目号分组存成嵌套，没有扁平副本" ;;
+  *) bad "回答的形状不对（嵌套键|扁平键 = ${SHAPE}）：$(cat "${PROJ}/.webuddy/state.json")" ;;
 esac
+
+# 这就是当初漏掉的那条断言：答过的键必须从待答里消失。
+# 缺了它，从看板提交的回答从来不生效这件事整整没人发现。
+AFTER_12="$(pending_keys 1.2 all)"
+if [ -z "$AFTER_12" ]; then
+  ok "答过的键从待答里消失了（1.2 现在一个键都不问了）"
+else
+  bad "答完还在问同一条：1.2 仍有待答键「${AFTER_12}」"
+fi
 
 echo
 echo "=== 7. 采纳建议后清单版本 +1 ==="
