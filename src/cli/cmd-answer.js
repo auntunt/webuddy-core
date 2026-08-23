@@ -181,21 +181,17 @@ export async function run(positionals, flags) {
   /**
    * 5. 写盘 —— 与 POST /v1/answers 同一条路径（loadState / saveState / appendRecord）。
    *
-   * 存两种形状是有意的，不是冗余：
-   *   - answers[条目号][键] —— evaluate.js 的 findPromptsPending 只认这一种，
-   *     不写它的话答完了 check 还会接着问同一条；
-   *   - answers["条目号.键"] —— api.js 现在写的就是这个平铺形状，
-   *     它不许改（§I3b：不许 fork 写入路径），那就顺手一起写，
-   *     两边谁读都读得到，不至于因为形状不同互相看不见对方答过的话。
-   * 这处形状不一致是既有毛病，见报告，改它是另一张单子的事。
+   * 只有一种形状：answers[条目号][键]。evaluate.js 的 findPromptsPending 认的
+   * 就是它，答完了 check 才不会接着问同一条。
+   *
+   * 这里曾经同时写一份 "条目号.键" 的平铺副本，为的是跟当时 api.js 的写法兼容。
+   * 那个不一致已经在 T2 修掉了（api.js 改写嵌套，老账由 loadState 读的时候折过来），
+   * 所以副本删了：两种形状并存的时候，谁是准的这个问题迟早会有人答错。
    */
   const all = state.answers && typeof state.answers === 'object' ? { ...state.answers } : {};
-  const nested = all[promptId] && typeof all[promptId] === 'object' ? { ...all[promptId] } : {};
-  for (const k of Object.keys(ans)) {
-    nested[k] = ans[k];
-    all[`${promptId}.${k}`] = ans[k];
-  }
-  all[promptId] = nested;
+  const group = all[promptId] && typeof all[promptId] === 'object' ? { ...all[promptId] } : {};
+  for (const k of Object.keys(ans)) group[k] = ans[k];
+  all[promptId] = group;
 
   saveState(projectDir, { answers: all });
   appendRecord(projectDir, { kind: 'answers', promptId, keys: Object.keys(ans) });

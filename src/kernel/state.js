@@ -63,6 +63,53 @@ function ensureStateDir(dir) {
 }
 
 /**
+ * 老账里的扁平回答键长什么样（T2）。
+ *
+ * 回答的唯一事实源是嵌套的 answers[条目号][键]（evaluate.js 的 findPromptsPending
+ * 只认这一种）。2026-08-23 之前 POST /v1/answers 写的是扁平的 "条目号.键"，
+ * 那些答案至今没人读得到——写进去了，check 却还在问同一个问题。
+ *
+ * 为什么按「数字.数字」这个形状拆，而不是按第一个点拆：条目号自己就带点。
+ * "1.2.approval" 按第一个点拆出来是 promptId="1"、key="2.approval"，
+ * 而 evaluate 查的是 answers["1.2"]，查不到 —— 迁移等于没做。
+ * 条目号是「数字.数字」是内核自己的约定（pack.js 解析小节标题用的就是这个），
+ * 不是哪个行业的知识。
+ */
+const FLAT_ANSWER_KEY = /^(\d+\.\d+)\.(.+)$/;
+
+/**
+ * 把扁平回答键就地折成嵌套形状（只在内存里转，不动文件）。
+ *
+ * 不主动改文件是有意的：loadState 是读操作，读一下就把人的 state.json 重写一遍，
+ * 会让「我只是看了看」变成一次改动。下一次任何 saveState 自然就写成嵌套了——
+ * saveState 是整个 answers 对象覆盖写，扁平键那时候会自己消失。
+ *
+ * 冲突时嵌套赢：嵌套是唯一事实源，扁平只是老账。
+ */
+function foldFlatAnswers(answers) {
+  if (!answers || typeof answers !== 'object' || Array.isArray(answers)) return answers;
+
+  const out = {};
+  const flat = [];
+  for (const [k, v] of Object.entries(answers)) {
+    const m = FLAT_ANSWER_KEY.exec(k);
+    // 值是对象的不当扁平键看：那是一个条目号恰好长得像三段的提问组，不是老账
+    const scalar = v === null || typeof v !== 'object';
+    if (m && scalar) flat.push([m[1], m[2], v]);
+    else out[k] = v;
+  }
+  if (flat.length === 0) return answers;
+
+  for (const [promptId, key, v] of flat) {
+    const grp = out[promptId] && typeof out[promptId] === 'object' && !Array.isArray(out[promptId])
+      ? out[promptId] : {};
+    if (!Object.hasOwn(grp, key)) grp[key] = v;
+    out[promptId] = grp;
+  }
+  return out;
+}
+
+/**
  * 加载项目状态
  * @param {string} dir - 项目目录
  * @returns {object|null} state.json 内容,不存在返回 null
@@ -75,7 +122,12 @@ export function loadState(dir) {
   }
   try {
     const content = fs.readFileSync(statePath_, 'utf8');
-    return JSON.parse(content);
+    const state = JSON.parse(content);
+    // 存量兼容：老的扁平回答键在这儿折成嵌套，读到的永远是唯一的那一种形状
+    if (state && typeof state === 'object' && state.answers) {
+      state.answers = foldFlatAnswers(state.answers);
+    }
+    return state;
   } catch (err) {
     throw new Error(`读取 state.json 失败: ${err.message}`);
   }

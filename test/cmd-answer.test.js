@@ -129,10 +129,12 @@ describe('webuddy answer（§I3b）', () => {
     await webuddy(['answer', '1.2', '--project', proj, '--set', 'approval=SP-9', '--set', 'approver=王五'], tmp);
 
     const st = readState(proj);
-    // evaluate 认的嵌套形状
+    // 只有一种形状：嵌套（T1 定的唯一事实源，evaluate 认的也是它）
     assert.deepEqual(st.answers['1.2'], { approval: 'SP-9', approver: '王五' });
-    // api.js 现在写的平铺形状，两边谁读都读得到
-    assert.equal(st.answers['1.2.approval'], 'SP-9');
+    // 曾经还会同时写一份 "1.2.approval" 的副本，T3 删掉了。
+    // 两种形状并存的时候，谁是准的这个问题迟早会有人答错。
+    const doubled = Object.keys(st.answers).filter((k) => k.startsWith('1.2.'));
+    assert.deepEqual(doubled, [], `落盘里不该再有副本键：${doubled.join('、')}`);
 
     const rec = readRecords(proj).filter((x) => x.kind === 'answers');
     assert.equal(rec.length, 1);

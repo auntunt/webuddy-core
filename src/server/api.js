@@ -612,10 +612,20 @@ export function createApiServer({ token, allowOrigin = null } = {}) {
         if (!fs.existsSync(projectDir)) { sendError(res, 404, `找不到 ${projectDir} 这个目录`); return; }
         const ans = body.answers && typeof body.answers === 'object' ? body.answers : {};
         const st = loadState(projectDir) || {};
+        /**
+         * 回答按条目号分组存：answers[条目号][键]（T1 定的唯一事实源）。
+         *
+         * 分组的原因跟原来一样——不同条目会有同名的 key（done、evidence），
+         * 一锅平铺存的话后答的会把先答的顶掉。原来是把条目号拼进键里
+         * （"1.2.approval"），形状对了但没人读得到：evaluate.js 的
+         * findPromptsPending 查的是 answers["1.2"].approval，
+         * 于是从看板提交的回答从来不生效，check 会一直重复追问同一条。
+         * 老账不用管，loadState 读的时候会把扁平键折成嵌套。
+         */
         const all = st.answers && typeof st.answers === 'object' ? { ...st.answers } : {};
-        // 键上带条目号：不同条目会有同名的 key（done、evidence），
-        // 平铺存的话后答的会把先答的顶掉。
-        for (const k of Object.keys(ans)) all[`${promptId}.${k}`] = ans[k];
+        const group = all[promptId] && typeof all[promptId] === 'object' ? { ...all[promptId] } : {};
+        for (const k of Object.keys(ans)) group[k] = ans[k];
+        all[promptId] = group;
         saveState(projectDir, { answers: all });
         appendRecord(projectDir, { kind: 'answers', promptId, keys: Object.keys(ans) });
         EVAL_CACHE.clear();
