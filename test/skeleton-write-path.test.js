@@ -70,7 +70,10 @@ function findWrites() {
         const touchesSkeleton =
           /skeleton\.json/.test(args) || [...bound].some((b) => new RegExp(`\\b${b}\\b`).test(args));
         if (!touchesSkeleton) return;
-        hits.push({ file: path.relative(ROOT, file), line: i + 1, text: raw.trim() });
+        // 统一成正斜杠：下面的白名单写的是 src/kernel/recompile.js，
+        // 而 Windows 上 path.relative 给的是 src\\kernel\\recompile.js，比不上
+        const rel = path.relative(ROOT, file).split(path.sep).join('/');
+        hits.push({ file: rel, line: i + 1, text: raw.trim() });
       });
     }
   }
